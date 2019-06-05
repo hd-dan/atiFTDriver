@@ -1,0 +1,15 @@
+<?xml version ="1.0"?>
+
+<drill>
+  <weight>
+    <x>0</x>
+    <y>0</y>
+    <z>0</z>
+  </weight>
+
+  <position>
+    <x>0</x>
+    <y>0</y>
+    <z>0</z>
+  </position>
+</drill>
