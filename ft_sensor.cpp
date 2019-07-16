@@ -29,7 +29,13 @@ ft_sensor::ft_sensor(std::string ftConfig_path, std::string drillConfig_path):
 
 void ft_sensor::initRcv(){
     I_= eye<double>(3,3);
-    sensorR_= &I_;
+    sensorR_= I_;
+
+    ftRawBuf_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
+    ftTipBuf_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
+    ftRawMA_= std::vector<double>(6,0);
+    ftTipMA_= std::vector<double>(6,0);
+    windowMA_= 300;
 
     tReadFt_= boost::thread(&ft_sensor::loopFt,this);
     while(ftRaw_.size()==0){
@@ -45,24 +51,66 @@ ft_sensor::~ft_sensor(){
     return;
 }
 
-void ft_sensor::setSensorR(std::vector<std::vector<double> > &R){
-    sensorR_= &R;
+void ft_sensor::setSensorR(std::vector<std::vector<double> > R){
+    sensorR_= R;
+    return;
+}
+
+std::vector<std::vector<double> > ft_sensor::getSensorR(){
+    return sensorR_;
+}
+
+void ft_sensor::setMAWindow(int sample){
+    windowMA_= unsigned(sample);
     return;
 }
 
 void ft_sensor::loopFt(){
     fStop_=0;
     while(!fStop_){
-        std::unique_lock<std::mutex> ftLock(mtxFt_);
-        ftRaw_= ftDriver_.getData();
-
-        std::vector<std::vector<double> > R= *sensorR_;
+        /// Get ftRaw and Remove drill weight on ft Reading
+        std::vector<std::vector<double> > R= sensorR_;
         std::vector<double> tipW= R*attachW_;
         std::vector<double> cali= appendVect(tipW, attachSp_*tipW);
-        ftTip_= ftRaw_-cali;
 
-        ftLock.unlock();
+        std::unique_lock<std::mutex> ftLockRaw(mtxFtRaw_);
+        ftRaw_= ftDriver_.getData();
+        ftTip_= ftRaw_-cali;
+        ftLockRaw.unlock();
+
+
+        /// Process and Compute Moving Average
+        std::vector<double> ftRawMA(ftRawMA_.size(),0);
+        std::vector<double> ftTipMA(ftTipMA_.size(),0);
+        for (unsigned int i=0;i<ftRaw_.size();i++){
+            ftRawBuf_.at(i).push_back(ftRaw_.at(i));
+            if (ftRawBuf_.at(i).size()>windowMA_){
+                auto it= ftRawBuf_.at(i).end();
+                ftRawBuf_.at(i)= std::vector<double>(it-windowMA_,it);
+            }
+            if (ftTipBuf_.at(i).size()>windowMA_){
+                auto it= ftTipBuf_.at(i).end();
+                ftTipBuf_.at(i)= std::vector<double>(it-windowMA_,it);
+            }
+
+            double sumRaw=0;
+            for(auto j:ftRawBuf_.at(i))
+                sumRaw+=j;
+            ftRawMA.at(i)= sumRaw/ftRawBuf_.at(i).size();
+
+            double sumTip=0;
+            for(auto j:ftTipBuf_.at(i))
+                sumTip+=j;
+            ftTipMA.at(i)= sumTip/ftRawBuf_.at(i).size();
+        }
+
+        std::unique_lock<std::mutex> ftLockMA(mtxFtMA_);
+        ftRawMA_= ftRawMA;
+        ftTipMA_= ftTipMA;
+        ftLockMA.unlock();
+
         boost::this_thread::interruption_point();
+        usleep(1e2);
     }
 }
 
@@ -99,7 +147,7 @@ void ft_sensor::loopFt(){
 
 void ft_sensor::calDrillBuf(){
     std::vector<double> ft_temp= ft_sensor::get_ftRaw();
-    std::vector<std::vector<double> > R_temp= *sensorR_;
+    std::vector<std::vector<double> > R_temp= sensorR_;
 
     for (unsigned int i=0;i<6;i++){
         if (i<3){
@@ -133,7 +181,6 @@ std::vector<double> ft_sensor::calibrateDrillFromBuf(){
     }
     attachP_= lsqQR(Sw,caliBufferTau_);
 
-
     caliBufferF_.clear();
     caliBufferTau_.clear();
     caliBufferRT_.clear();
@@ -144,15 +191,24 @@ std::vector<double> ft_sensor::calibrateDrillFromBuf(){
 std::vector<double> ft_sensor::calibrateDrill(double calt){
     printf("Calibrating..\n");
 
-    std::vector<double> f;
-    std::chrono::high_resolution_clock::time_point t0=
-            std::chrono::high_resolution_clock::now();
-    double t=0;
-    while (t<calt){
-        ft_sensor::calDrillBuf();
+    for (int i=0;i<10;i++){
+        printf("Position %d..\n",i);
 
-        t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
-        usleep(1e3);
+        std::chrono::high_resolution_clock::time_point t0=
+                std::chrono::high_resolution_clock::now();
+        double t=0;
+        while (t<calt){
+            ft_sensor::calDrillBuf();
+
+            t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
+            usleep(1e3);
+        }
+
+        printf("Press Enter to Continue Or 'q' to Finish):");
+        std::string a;
+        std::getline(std::cin,a);
+        if (!a.compare("q"))
+            break;
     }
 
     return ft_sensor::calibrateDrillFromBuf();
@@ -188,22 +244,33 @@ void ft_sensor::set_drillConfigPath(std::string path){
 
 
 std::vector<double> ft_sensor::get_ftRaw(){
-    std::unique_lock<std::mutex> ftLock(mtxFt_);
+    std::unique_lock<std::mutex> ftLockRaw(mtxFtRaw_);
     return ftRaw_;
 }
 
 std::vector<double> ft_sensor::get_ftTip(){
-    std::unique_lock<std::mutex> ftLock(mtxFt_);
+    std::unique_lock<std::mutex> ftLockRaw(mtxFtRaw_);
     return ftTip_;
 }
+
+std::vector<double> ft_sensor::get_ftRawMA(){
+    std::unique_lock<std::mutex> ftLockMA(mtxFtMA_);
+    return ftRawMA_;
+}
+
+std::vector<double> ft_sensor::get_ftTipMA(){
+    std::unique_lock<std::mutex> ftLockMA(mtxFtMA_);
+    return ftTipMA_;
+}
+
+
 
 void ft_sensor::setCalFtBiasMode(bool calMode){
     return ftDriver_.setCalibrateMode(calMode);
 }
 
 std::vector<std::vector<double> > ft_sensor::calibrateFtBias(double cali_t){
-//    ftDriver_.setBias(std::vector<double>(6,0));
-    ftDriver_.setCalibrateMode(1);
+    ftDriver_.setCalibrateMode(true);
 
     std::vector<std::vector<double> > ftTBuf(6,std::vector<double>(0,0));
     std::chrono::high_resolution_clock::time_point t0;
@@ -224,7 +291,7 @@ std::vector<std::vector<double> > ft_sensor::calibrateFtBias(double cali_t){
     printf("avg fx: %.3f | fy: %.3f | fz: %.3f | tx: %.3f | ty: %.3f | tz: %.3f\n",
            ftAvg.at(0),ftAvg.at(1),ftAvg.at(2), ftAvg.at(3),ftAvg.at(4),ftAvg.at(5));
 
-    ftDriver_.setCalibrateMode(0);
+    ftDriver_.setCalibrateMode(false);
     ft_sensor::set_ftBias(ftAvg);
     return ftTBuf;
 }

@@ -136,7 +136,8 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
   seq_counter_(0),
   diag_packet_count_(0),
   last_rdt_sequence_(0),
-  system_status_(0){
+  system_status_(0),
+  fCali_(0){
 
   double forceCount,torqueCount;
   bias_= std::vector<double>(6,0);
@@ -161,11 +162,14 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
       for (int i=int(bias_.size());i<6;i++){
           bias_.push_back(0);
       }
+
+      printf("Read Config File\n");
       printf("Bias: ");
       for (unsigned int i=0;i<bias_.size();i++){
           printf("%.2f ",bias_.at(i));
       }
       printf("\n");
+      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
   }
 
   // Construct UDP socket
@@ -184,6 +188,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
   static const double counts_per_torque = torqueCount;
   force_scale_ = 1.0 / counts_per_force;
   torque_scale_ = 1.0 / counts_per_torque;
+  printf("force_scale: %.9f | torque_scale: %.9f\n",force_scale_,torque_scale_);
 
   // Start receive thread  
   recv_thread_ = boost::thread(&NetFTRDTDriver::recvThreadFunc, this);

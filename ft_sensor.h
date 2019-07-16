@@ -7,6 +7,7 @@
 
 #include <boost/thread.hpp>
 #include <mutex>
+#include <chrono>
 
 class ft_sensor{
 private:
@@ -23,13 +24,21 @@ private:
     std::vector<double> read_drillConfig();
 
     std::vector<std::vector<double> > I_;
-    std::vector<std::vector<double> > *sensorR_;
+    std::vector<std::vector<double> > sensorR_;
     bool fStop_;
     void loopFt();
     boost::thread tReadFt_;
-    std::mutex mtxFt_;
+    std::mutex mtxFtRaw_;
+    std::mutex mtxFtMA_;
+
     std::vector<double> ftRaw_;
     std::vector<double> ftTip_; //tipF
+
+    unsigned int windowMA_;
+    std::vector<std::vector<double> > ftRawBuf_;
+    std::vector<std::vector<double> > ftTipBuf_;
+    std::vector<double> ftTipMA_;
+    std::vector<double> ftRawMA_;
 
     unsigned int caliN_;
     std::vector<double> caliBufferF_;
@@ -42,18 +51,21 @@ public:
     ft_sensor(std::string ftConfig, std::string drillConfig);
     ~ft_sensor();
 
-    void setSensorR(std::vector<std::vector<double> > &R);
-
+    void setSensorR(std::vector<std::vector<double> > R);
+    std::vector<std::vector<double> > getSensorR();
+    void setMAWindow(int sample);
 //    std::vector<double> calibrateDrill(std::vector<double> ft, std::vector<std::vector<double> > Rs);
 
     void calDrillBuf();
     std::vector<double> calibrateDrillFromBuf();
-    std::vector<double> calibrateDrill(double calt=10);
+    std::vector<double> calibrateDrill(double calt=3);
     void save_drillCalibration();
     void set_drillConfigPath(std::string path);
 
     std::vector<double> get_ftTip();
     std::vector<double> get_ftRaw();
+    std::vector<double> get_ftTipMA();
+    std::vector<double> get_ftRawMA();
 
     void setCalFtBiasMode(bool calMode);
     std::vector<std::vector<double> > calibrateFtBias(double cali_t=5);
