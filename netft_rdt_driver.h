@@ -71,6 +71,9 @@ public:
   void saveBiasToConfig();
   void saveBiasToConfig(std::vector<double> bias);
 
+  std::vector<double> getScale();
+  std::vector<double> getBias();
+
   void setCalibrateMode(bool calMode);
 
 protected:

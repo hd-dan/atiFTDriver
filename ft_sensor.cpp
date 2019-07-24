@@ -15,9 +15,10 @@ ft_sensor::ft_sensor(std::string ftConfig_path, std::string drillConfig_path):
                                         drillConfig_path_(drillConfig_path),
                                         fStop_(0),caliN_(0){
     fConfigExist_= std::ifstream(drillConfig_path_).good();
-    if (fConfigExist_)
+    if (fConfigExist_){
         ft_sensor::read_drillConfig();
-    else{
+    }else{
+        printf("Failed to open payload config file.\n");
         attachW_= std::vector<double>(3,0);
         attachP_= std::vector<double>(3,0);
         attachSp_= crossMat(attachP_);
@@ -28,14 +29,20 @@ ft_sensor::ft_sensor(std::string ftConfig_path, std::string drillConfig_path):
 }
 
 void ft_sensor::initRcv(){
-    I_= eye<double>(3,3);
-    sensorR_= I_;
+    sensorR_= eye<double>(3,3);
 
     ftRawBuf_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
     ftTipBuf_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
     ftRawMA_= std::vector<double>(6,0);
     ftTipMA_= std::vector<double>(6,0);
     windowMA_= 300;
+
+    calBufBias_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
+    biasN1_=0;
+    biasN2_=0;
+    caliBufferF_= std::vector<double>(0,0);
+    caliBufferTau_= std::vector<double>(0,0);
+    caliBufferRT_= std::vector<std::vector<double> >(0,std::vector<double>(0,0));
 
     tReadFt_= boost::thread(&ft_sensor::loopFt,this);
     while(ftRaw_.size()==0){
@@ -167,6 +174,7 @@ void ft_sensor::calDrillBuf(){
 std::vector<double> ft_sensor::calibrateDrillFromBuf(){
 ////    tipF= 0R_tipT*0W
     attachW_= lsqQR(caliBufferRT_,caliBufferF_);
+    print_num("werr",norm(caliBufferF_-caliBufferRT_*attachW_));
 
 ////    tipTau= tipP x tipW
     std::vector<double> tipW= caliBufferRT_*attachW_*-1;
@@ -189,7 +197,7 @@ std::vector<double> ft_sensor::calibrateDrillFromBuf(){
 }
 
 std::vector<double> ft_sensor::calibrateDrill(double calt){
-    printf("Calibrating..\n");
+    printf("Calibrating Payload..\n");
 
     for (int i=0;i<10;i++){
         printf("Position %d..\n",i);
@@ -204,9 +212,8 @@ std::vector<double> ft_sensor::calibrateDrill(double calt){
             usleep(1e3);
         }
 
-        printf("Press Enter to Continue Or 'q' to Finish):");
-        std::string a;
-        std::getline(std::cin,a);
+        printf("Press Enter to Continue Or 'q' to Finish:");
+        std::string a; std::getline(std::cin,a);
         if (!a.compare("q"))
             break;
     }
@@ -215,6 +222,7 @@ std::vector<double> ft_sensor::calibrateDrill(double calt){
 }
 
 std::vector<double> ft_sensor::read_drillConfig(){
+    printf("Reading payload congif file.\n");
     drillConfigFile_.readFile(drillConfig_path_);
     attachW_= drillConfigFile_.getXmlVect<double>("drill.weight");
     attachP_= drillConfigFile_.getXmlVect<double>("drill.position");
@@ -233,7 +241,9 @@ void ft_sensor::save_drillCalibration(){
     pt.put("drill.position.y",attachP_.at(1));
     pt.put("drill.position.z",attachP_.at(2));
 
-    drillConfigFile_.writeFile(drillConfig_path_,pt);
+//    drillConfigFile_.writeFile(drillConfig_path_,pt);
+    boost::property_tree::xml_writer_settings<std::string> settings(' ', 2,"ASCII");
+    boost::property_tree::write_xml(drillConfig_path_,pt,std::locale(),settings);
     return;
 }
 
@@ -269,31 +279,62 @@ void ft_sensor::setCalFtBiasMode(bool calMode){
     return ftDriver_.setCalibrateMode(calMode);
 }
 
-std::vector<std::vector<double> > ft_sensor::calibrateFtBias(double cali_t){
+void ft_sensor::calBiasBuf(bool oppDir){
+    std::vector<double> ft_temp= ft_sensor::get_ftRaw();
+    for (unsigned int i=0;i<6;i++){
+        calBufBias_.at(i).push_back(ft_temp.at(i));
+    }
+    if (!oppDir) biasN1_++;
+    else biasN2_++;
+    return;
+}
+
+std::vector<double> ft_sensor::calBiasFromBuf(){
+    std::vector<double> ftAvg= mean(calBufBias_,0)*-1;
+    ft_sensor::set_ftBias(ftAvg);
+
+    for(unsigned int i=0;i<ftAvg.size();i++){
+        if (i<3) ftAvg.at(i)*=ftDriver_.getScale().at(0);
+        else ftAvg.at(i)*=ftDriver_.getScale().at(1);
+    }
+    printf("calibrated bias:[%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]\n",
+           ftAvg.at(0),ftAvg.at(1),ftAvg.at(2),ftAvg.at(3),ftAvg.at(4),ftAvg.at(5));
+
+    calBufBias_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
+    biasN1_=0;
+    biasN2_=0;
+    return ftAvg;
+}
+
+bool ft_sensor::checkBiasBuffNEq(){
+    if (biasN1_!=biasN2_) return 0;
+    else if (biasN1_==0) return 0;
+    else return 1;
+}
+
+std::vector<double> ft_sensor::calibrateFtBias(double cali_t){
     ftDriver_.setCalibrateMode(true);
 
-    std::vector<std::vector<double> > ftTBuf(6,std::vector<double>(0,0));
-    std::chrono::high_resolution_clock::time_point t0;
-    t0= std::chrono::high_resolution_clock::now();
-    double t=0;
     printf("Calibrating Ft Bias..\n");
-    while (t<cali_t){
-        t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
+    for (int i=0;i<2;i++){
+        std::chrono::high_resolution_clock::time_point t0
+                = std::chrono::high_resolution_clock::now();
+        double t=0;
+        while ( (!i&&t<cali_t) || (i&&!ft_sensor::checkBiasBuffNEq()) ){
+            t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
+            ft_sensor::calBiasBuf(i);
 
-        std::vector<double> ft_temp= ft_sensor::get_ftRaw();
-
-        for (unsigned int i=0;i<6;i++){
-            ftTBuf.at(i).push_back(ft_temp.at(i));
+            usleep(1e3);
         }
-        usleep(1e3);
+        if (!i){
+            printf("Turn the sensor to opposite direction & Press Enter:");
+            std::string a; std::getline(std::cin,a);
+        }
     }
-    std::vector<double> ftAvg= mean(ftTBuf,0)*-1;
-    printf("avg fx: %.3f | fy: %.3f | fz: %.3f | tx: %.3f | ty: %.3f | tz: %.3f\n",
-           ftAvg.at(0),ftAvg.at(1),ftAvg.at(2), ftAvg.at(3),ftAvg.at(4),ftAvg.at(5));
-
+    std::vector<double> bias= ft_sensor::calBiasFromBuf();
     ftDriver_.setCalibrateMode(false);
-    ft_sensor::set_ftBias(ftAvg);
-    return ftTBuf;
+
+    return bias;
 }
 
 void ft_sensor::set_ftBias(std::vector<double> bias){

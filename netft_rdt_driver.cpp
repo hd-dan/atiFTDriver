@@ -163,13 +163,13 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
           bias_.push_back(0);
       }
 
-      printf("Read Config File\n");
-      printf("Bias: ");
+      printf("Read Ft Config File\n");
+      printf("Bias: [");
       for (unsigned int i=0;i<bias_.size();i++){
-          printf("%.2f ",bias_.at(i));
+          printf("%.2f, ",bias_.at(i));
       }
-      printf("\n");
-      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
+      printf("]\n");
+//      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
   }
 
   // Construct UDP socket
@@ -225,18 +225,24 @@ NetFTRDTDriver::~NetFTRDTDriver(){
   socket_.close();
 }
 
+std::vector<double> NetFTRDTDriver::getScale(){
+    return std::vector<double>{force_scale_,torque_scale_};
+}
+
+std::vector<double> NetFTRDTDriver::getBias(){
+    return bias_;
+}
+
 void NetFTRDTDriver::setBias(std::vector<double> bias, bool calMode){
     if (calMode){
-        bias_= bias;
-    }
-    else{
         for (unsigned int i=0; i<bias.size();i++){
             double bias_i= bias.at(i);
-            if (i<3)
-                bias_i/=force_scale_;
-            else
-                bias_i/=torque_scale_;
-
+            if (i<3) bias_.at(i)= bias_i*force_scale_;
+            else bias_.at(i)= bias_i*torque_scale_;
+        }
+    }else{
+        for (unsigned int i=0; i<bias.size();i++){
+            double bias_i= bias.at(i);
             bias_.at(i)= bias_.at(i)-bias_i;
         }
     }
@@ -329,12 +335,12 @@ void NetFTRDTDriver::recvThreadFunc(){
                 tmp_data.at(4)= rdt_record.ty_;
                 tmp_data.at(5)= rdt_record.tz_;
             }else{
-                tmp_data.at(0)= double(rdt_record.fx_ + bias_.at(0) )*force_scale_;
-                tmp_data.at(1)= double(rdt_record.fy_ + bias_.at(1) )*force_scale_;
-                tmp_data.at(2)= double(rdt_record.fz_ + bias_.at(2) )*force_scale_;
-                tmp_data.at(3)= double(rdt_record.tx_ + bias_.at(3) )*torque_scale_;
-                tmp_data.at(4)= double(rdt_record.ty_ + bias_.at(4) )*torque_scale_;
-                tmp_data.at(5)= double(rdt_record.tz_ + bias_.at(5) )*torque_scale_;
+                tmp_data.at(0)= double(rdt_record.fx_)*force_scale_ + bias_.at(0);
+                tmp_data.at(1)= double(rdt_record.fy_)*force_scale_ + bias_.at(1) ;
+                tmp_data.at(2)= double(rdt_record.fz_)*force_scale_ + bias_.at(2) ;
+                tmp_data.at(3)= double(rdt_record.tx_)*torque_scale_ + bias_.at(3) ;
+                tmp_data.at(4)= double(rdt_record.ty_)*torque_scale_ + bias_.at(4) ;
+                tmp_data.at(5)= double(rdt_record.tz_)*torque_scale_ + bias_.at(5) ;
             }
 
           { boost::unique_lock<boost::mutex> lock(mutex_);

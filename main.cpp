@@ -15,36 +15,67 @@ void readFt(){
     std::chrono::high_resolution_clock::time_point t0=
             std::chrono::high_resolution_clock::now();
     double t=0;
-    while (t<10){
-        std::chrono::high_resolution_clock::time_point ti=
-                std::chrono::high_resolution_clock::now();
-
+    while (t<100){
         std::vector<double> f= ft.get_ftRaw();
         std::vector<double> fma= ft.get_ftRawMA();
         std::vector<double> fsub= std::vector<double>(f.begin(),f.begin()+3);
 //        for (unsigned i=0;i<3;i++){
 //            fsub.push_back(fma.at(i));
 //        }
-//        print_vector("fsub",fsub);
-
-        double dt= std::chrono::duration_cast<std::chrono::duration<double> >(
-                    std::chrono::high_resolution_clock::now()-ti).count();
-        printf("t: %f\n",dt);
+        print_vector("fsub",fsub);
 
         plotServer.sendData(fsub);
         t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
         usleep(1e3);
+
     }
 }
 
 void calFt(){
 
     ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml");
-    ft.calibrateFtBias(100);
-//    std::vector<double> wp= ft.calibrateDrill(10);
-//    print_vector("wp",wp);
+    ft.calibrateFtBias(10);
 
     return;
+}
+
+void calAttach(){
+    ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml",
+                 "~/Dan/atiFTDriver/config/drillConfig.xml");
+
+    double calt=3;
+
+    std::vector<std::vector<double> > Rdown= makeMat<double>(3,3,0);
+    std::vector<std::vector<double> > Rup= eye<double>(3,3);
+    Rdown.at(1).at(1)=-1; Rdown.at(2).at(2)=-1;
+
+    printf("Calibrating Payload..\n");
+    for (int i=0;i<10;i++){
+        printf("Position %d..\n",i);
+
+        std::chrono::high_resolution_clock::time_point t0=
+                std::chrono::high_resolution_clock::now();
+        double t=0;
+        while (t<calt){
+            if (i) ft.setSensorR(Rdown);
+            else ft.setSensorR(Rup);
+
+            ft.calDrillBuf();
+
+            t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
+            usleep(1e3);
+        }
+
+        printf("Press Enter to Continue Or 'q' to Finish:");
+        std::string a;
+        std::getline(std::cin,a);
+        if (!a.compare("q"))
+            break;
+    }
+
+    std::vector<double> attachWP= ft.calibrateDrillFromBuf();
+    print_vector("attachWP",attachWP);
+    ft.save_drillCalibration();
 }
 
 void calPressureSensor(){
@@ -85,10 +116,13 @@ void calPressureSensor(){
 int main(){
     std::cout << "Hello World!" << std::endl;
 
+    /// yellow: x-axis | blue: y-axis
 //    calPressureSensor();
     readFt();
 //    calFt();
+//    calAttach();
 
+//    test();
 
     return 0;
 }

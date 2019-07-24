@@ -45,6 +45,8 @@ private:
     std::vector<double> caliBufferTau_;
     std::vector<std::vector<double> > caliBufferRT_;
 
+    std::vector<std::vector<double> > calBufBias_;
+    int biasN1_,biasN2_;
 
 public:
     ft_sensor(std::string ftConfig);
@@ -68,7 +70,10 @@ public:
     std::vector<double> get_ftRawMA();
 
     void setCalFtBiasMode(bool calMode);
-    std::vector<std::vector<double> > calibrateFtBias(double cali_t=5);
+    void calBiasBuf(bool oppDir=0);
+    bool checkBiasBuffNEq();
+    std::vector<double> calBiasFromBuf();
+    std::vector<double> calibrateFtBias(double cali_t=5);
     void set_ftBias(std::vector<double> bias);
 };
 
