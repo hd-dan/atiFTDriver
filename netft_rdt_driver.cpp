@@ -126,7 +126,7 @@ void RDTCommand::pack(uint8_t *buffer) const
 //NetFTRDTDriver::NetFTRDTDriver(const std::string &address) :
 //  address_(address),
 NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
-  configPath_(configPath),
+  configPath_(configPath),fCali_(0),
   socket_(io_service_),
   stop_recv_thread_(false),
   recv_thread_running_(false),
@@ -136,8 +136,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
   seq_counter_(0),
   diag_packet_count_(0),
   last_rdt_sequence_(0),
-  system_status_(0),
-  fCali_(0){
+  system_status_(0){
 
   double forceCount,torqueCount;
   bias_= std::vector<double>(6,0);

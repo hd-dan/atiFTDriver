@@ -10,15 +10,17 @@
 void readFt(){
     commun plotServer("127.0.0.1",8888,0,1);
 
-    ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml");
+    ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml",
+                 "~/Dan/atiFTDriver/config/drillConfig.xml");
+    ft.setSensorQuat(std::vector<double>{1,0,0,0});
 
     std::chrono::high_resolution_clock::time_point t0=
             std::chrono::high_resolution_clock::now();
     double t=0;
-    while (t<100){
+    while (t<30){
         std::vector<double> f= ft.get_ftRaw();
-        std::vector<double> fma= ft.get_ftRawMA();
         std::vector<double> fsub= std::vector<double>(f.begin(),f.begin()+3);
+//        std::vector<double> fma= ft.get_ftRawMA();
 //        for (unsigned i=0;i<3;i++){
 //            fsub.push_back(fma.at(i));
 //        }
@@ -33,9 +35,18 @@ void readFt(){
 
 void calFt(){
 
-    ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml");
-    ft.calibrateFtBias(10);
+    ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml",
+                 "~/Dan/atiFTDriver/config/drillConfig.xml");
 
+    printf("Calibrating Ft Bias..\n");
+    for (int i=0;i<2;i++){
+        ft.calBiasEpisode(10);
+        if (!i){
+            printf("Turn the sensor to opposite direction & Press Enter:");
+            std::string a; std::getline(std::cin,a);
+        }
+    }
+    std::vector<double> bias= ft.calBiasFromBuf();
     return;
 }
 
@@ -43,28 +54,16 @@ void calAttach(){
     ft_sensor ft("~/Dan/atiFTDriver/config/ftConfig.xml",
                  "~/Dan/atiFTDriver/config/drillConfig.xml");
 
+    std::vector<double> quat_down= {1,0,0,0};
+    std::vector<double> quat_up= {0,0,0,1};
+
     double calt=3;
-
-    std::vector<std::vector<double> > Rdown= makeMat<double>(3,3,0);
-    std::vector<std::vector<double> > Rup= eye<double>(3,3);
-    Rdown.at(1).at(1)=-1; Rdown.at(2).at(2)=-1;
-
     printf("Calibrating Payload..\n");
     for (int i=0;i<10;i++){
         printf("Position %d..\n",i);
 
-        std::chrono::high_resolution_clock::time_point t0=
-                std::chrono::high_resolution_clock::now();
-        double t=0;
-        while (t<calt){
-            if (i) ft.setSensorR(Rdown);
-            else ft.setSensorR(Rup);
-
-            ft.calDrillBuf();
-
-            t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
-            usleep(1e3);
-        }
+        if (i) ft.calibrateDrillEpisode(quat_down,calt);
+        else ft.calibrateDrillEpisode(quat_up,calt);
 
         printf("Press Enter to Continue Or 'q' to Finish:");
         std::string a;
@@ -73,9 +72,9 @@ void calAttach(){
             break;
     }
 
-    std::vector<double> attachWP= ft.calibrateDrillFromBuf();
+    std::vector<double> attachWP= ft.calibrateDrillFromBuf(true);
     print_vector("attachWP",attachWP);
-    ft.save_drillCalibration();
+    return;
 }
 
 void calPressureSensor(){
@@ -121,8 +120,6 @@ int main(){
     readFt();
 //    calFt();
 //    calAttach();
-
-//    test();
 
     return 0;
 }
