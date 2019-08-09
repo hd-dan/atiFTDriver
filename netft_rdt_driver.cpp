@@ -140,7 +140,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
 
   double forceCount,torqueCount;
   bias_= std::vector<double>(6,0);
-  configPath_= checkPath(configPath_);
+  configPath_= NetFTRDTDriver::checkPath(configPath_);
   if (!std::ifstream(configPath_).good()){
       address_= "192.168.1.108";
       forceCount = 10000000;
@@ -223,6 +223,21 @@ NetFTRDTDriver::~NetFTRDTDriver(){
   }
   socket_.close();
 }
+
+std::string NetFTRDTDriver::checkPath(std::string path){
+    if (path.at(0)=='~'){
+        path.erase(0,1);
+        path= std::string("/home/") + getenv("LOGNAME") + path;
+    }
+
+    std::string dir= path.substr(0,path.find_last_of('/'));
+    struct stat st;
+    if (stat(dir.c_str(),&st)!=0){
+        mkdir(dir.c_str(),S_IRWXU);
+    }
+    return path;
+}
+
 
 std::vector<double> NetFTRDTDriver::getScale(){
     return std::vector<double>{force_scale_,torque_scale_};

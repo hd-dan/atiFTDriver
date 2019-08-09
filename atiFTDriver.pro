@@ -10,7 +10,6 @@ SOURCES += \
     ft_sensor.cpp \
     netft_rdt_driver.cpp \
     ../dataFile/xml_file.cpp \
-    ../util/util_util.cpp \
     ../commun/commun.cpp \
     ../commun/serialcom.cpp \
 
@@ -19,7 +18,6 @@ HEADERS += \
     netft_rdt_driver.h \
     ../dataFile/xml_file.h \
     ../util/util.hpp \
-    ../util/util_util.h \
     ../commun/serialcom.h \
 
 LIBS += -lboost_system -lboost_thread -lpthread

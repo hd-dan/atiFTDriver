@@ -89,6 +89,8 @@ protected:
   std::string address_;
   bool fCali_;
 
+  std::string checkPath(std::string path);
+
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
   boost::mutex mutex_;
