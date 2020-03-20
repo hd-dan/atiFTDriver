@@ -141,6 +141,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
   double forceCount,torqueCount;
   bias_= std::vector<double>(6,0);
   slope_= std::vector<double>(6,0);
+  calibration_com_= {0.2,0.2,0.5};
   configPath_= NetFTRDTDriver::checkPath(configPath_);
   if (!std::ifstream(configPath_).good()){
       address_= "192.168.1.108";
@@ -166,6 +167,12 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
           slope_= configFile_.getXmlVect<double>("ft.slope");
       for (int i=int(slope_.size());i<6;i++){
           slope_.push_back(0);
+      }
+
+      if (configFile_.checkElementExist("ft.com4cal"))
+          calibration_com_= configFile_.getXmlVect<double>("ft.com4cal");
+      for (int i=int(calibration_com_.size());i<3;i++){
+          calibration_com_.push_back(0);
       }
 
       printf("Read Ft Config File\n");
@@ -249,6 +256,9 @@ std::string NetFTRDTDriver::checkPath(std::string path){
     return path;
 }
 
+std::vector<double> NetFTRDTDriver::getCom(){
+    return calibration_com_;
+}
 
 std::vector<double> NetFTRDTDriver::getScale(){
     return std::vector<double>{force_scale_,torque_scale_};
@@ -295,6 +305,9 @@ void NetFTRDTDriver::saveCalibration(){
     }
     for (unsigned int i=0; i<slope_.size();i++){
         pt.put("ft.slope."+strPool.at(i), slope_.at(i) );
+    }
+    for (unsigned int i=0; i<calibration_com_.size();i++){
+        pt.put("ft.com4cal."+strPool.at(i), calibration_com_.at(i) );
     }
     pt.put("ft.ip",address_);
     pt.put("ft.forceCount",int(1./force_scale_));

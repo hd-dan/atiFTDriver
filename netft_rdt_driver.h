@@ -73,6 +73,7 @@ public:
   void saveCalibration(std::vector<std::vector<double> > mc);
   void saveCalibration();
 
+  std::vector<double> getCom();
   std::vector<double> getScale();
   std::vector<double> getBias();
 
@@ -121,6 +122,7 @@ protected:
   //! Scaling factor for converting raw torque values into Newton*meters
   double torque_scale_;
 
+  std::vector<double> calibration_com_;
   std::vector<double> slope_;
   std::vector<double> bias_;
 

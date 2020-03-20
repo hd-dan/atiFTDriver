@@ -41,8 +41,9 @@ private:
     std::vector<double> ftRawMA_;
 
     unsigned int drillBufN_;
-    std::vector<double> drillBufF_;
-    std::vector<double> drillBufTau_;
+//    std::vector<double> drillBufF_;
+//    std::vector<double> drillBufTau_;
+    std::vector<std::vector<double> >drillBufFt_;
     std::vector<std::vector<double> > drillBufRT_;
 
     std::vector<double> g_;
