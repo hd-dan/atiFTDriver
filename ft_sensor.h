@@ -40,14 +40,19 @@ private:
     std::vector<double> ftTipMA_;
     std::vector<double> ftRawMA_;
 
-    unsigned int caliN_;
-    std::vector<double> caliBufferF_;
-    std::vector<double> caliBufferTau_;
-    std::vector<std::vector<double> > caliBufferRT_;
+    unsigned int drillBufN_;
+    std::vector<double> drillBufF_;
+    std::vector<double> drillBufTau_;
+    std::vector<std::vector<double> > drillBufRT_;
 
-    std::vector<std::vector<double> > calBufBias_;
-    int biasN1_,biasN2_;
-    int calBiasEp_;
+    std::vector<double> g_;
+    std::vector<double> com_;
+    std::vector<std::vector<double> > sensorBuf_;
+    std::vector<std::vector<double> > sensorMc_;
+
+//    std::vector<std::vector<double> > calBufBias_;
+//    int biasN1_,biasN2_;
+//    int calBiasEp_;
 
 public:
     ft_sensor(std::string ftConfig);
@@ -59,26 +64,31 @@ public:
     std::vector<std::vector<double> > getSensorR();
     void setMAWindow(int sample);
 
-    void calDrillBuf();
-    void calibrateDrillEpisode(std::vector<std::vector<double> >R, double calt=5);
-    void calibrateDrillEpisode(std::vector<double> quat, double calt=5);
-    std::vector<double> calibrateDrillFromBuf(bool save=1);
-//    std::vector<double> calibrateDrill(double calt=3);
-    void save_drillCalibration();
     void set_drillConfigPath(std::string path);
+    void bufForDrillCal();
+    void episodeBufForDrillCal(std::vector<std::vector<double> >R, double calt=5);
+    std::vector<double> calibrateDrillFromBuf(bool save=1);
+    void save_drillCalibration();
 
     std::vector<double> get_ftTip();
     std::vector<double> get_ftRaw();
     std::vector<double> get_ftTipMA();
     std::vector<double> get_ftRawMA();
 
-    void setCalFtBiasMode(bool calMode);
-    void calBiasBuf(bool oppDir=0);
-    bool checkBiasBuffNEq();
-    void calBiasEpisode(double calt=5);
-    std::vector<double> calBiasFromBuf();
-    std::vector<double> calibrateFtBias(double cali_t=5);
-    void set_ftBias(std::vector<double> bias);
+
+    void setSensorCalMode(bool fcalMode);
+    void bufForSensorCal(double mi,std::vector<std::vector<double> > R, double calt=5);
+    std::vector<std::vector<double> > calibrateSensorFromBuf();
+    void save_sensorCalibration();
+
+
+//    void setCalFtBiasMode(bool calMode);
+//    void calBiasBuf(bool oppDir=0);
+//    bool checkBiasBuffNEq();
+//    void calBiasEpisode(double calt=5);
+//    std::vector<double> calBiasFromBuf();
+//    std::vector<double> calibrateFtBias(double cali_t=5);
+//    void set_ftBias(std::vector<double> bias);
 };
 
 #endif // FT_SENSOR_H

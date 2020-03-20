@@ -67,9 +67,11 @@ public:
   bool waitForNewData(void);
 
 
-  void setBias(std::vector<double> bias, bool calMode=1);
-  void saveBiasToConfig();
-  void saveBiasToConfig(std::vector<double> bias);
+//  void setBias(std::vector<double> slope, std::vector<double> bias, bool calMode=1);
+//  void saveBiasToConfig(std::vector<double> slope, std::vector<double> bias);
+  void setCalibration(std::vector<std::vector<double> > mc, bool calMode=1);
+  void saveCalibration(std::vector<std::vector<double> > mc);
+  void saveCalibration();
 
   std::vector<double> getScale();
   std::vector<double> getBias();
@@ -119,6 +121,7 @@ protected:
   //! Scaling factor for converting raw torque values into Newton*meters
   double torque_scale_;
 
+  std::vector<double> slope_;
   std::vector<double> bias_;
 
   //! Packet count last time diagnostics thread published output

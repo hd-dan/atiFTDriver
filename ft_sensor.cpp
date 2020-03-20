@@ -130,32 +130,30 @@ void ft_sensor::loopFt(){
     }
 }
 
-void ft_sensor::calDrillBuf(){
+void ft_sensor::bufForDrillCal(){
     std::vector<double> ft_temp= ft_sensor::get_ftRaw();
     std::vector<std::vector<double> > R_temp= sensorR_;
 
     for (unsigned int i=0;i<6;i++){
         if (i<3){
-            caliBufferF_.push_back(ft_temp.at(i));
+            drillBufF_.push_back(ft_temp.at(i));
             std::vector<double> RTi;
-            for (unsigned int j=0;j<R_temp.size();j++){
+            for (unsigned int j=0;j<R_temp.size();j++)
                 RTi.push_back(R_temp.at(j).at(i));
-            }
-            caliBufferRT_.push_back(RTi);
+            drillBufRT_.push_back(RTi);
         }else
-            caliBufferTau_.push_back(ft_temp.at(i));
+            drillBufTau_.push_back(ft_temp.at(i));
     }
-    caliN_++;
+    drillBufN_++;
     return;
 }
 
-void ft_sensor::calibrateDrillEpisode(std::vector<std::vector<double> >R, double calt){
+void ft_sensor::episodeBufForDrillCal(std::vector<std::vector<double> > R, double calt){
     ft_sensor::setSensorR(R);
-    std::chrono::high_resolution_clock::time_point t0=
-            std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     double t=0;
     while (t<calt){
-        ft_sensor::calDrillBuf();
+        ft_sensor::bufForDrillCal();
 
         t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
         usleep(1e3);
@@ -163,20 +161,15 @@ void ft_sensor::calibrateDrillEpisode(std::vector<std::vector<double> >R, double
     return;
 }
 
-void ft_sensor::calibrateDrillEpisode(std::vector<double> quat, double calt){
-    ft_sensor::calibrateDrillEpisode(quat2rotm(quat),calt);
-    return;
-}
-
 std::vector<double> ft_sensor::calibrateDrillFromBuf(bool save){
 ////    tipF= 0R_tipT*0W
-    attachW_= lsqQR(caliBufferRT_,caliBufferF_);
-//    print_num("werr",norm(caliBufferF_-caliBufferRT_*attachW_));
+    attachW_= lsqQR(drillBufRT_,drillBufF_);
+//    printf("werr: %.3f\n",norm(caliBufferF_-caliBufferRT_*attachW_));
 
 ////    tipTau= tipP x tipW
-    std::vector<double> tipW= caliBufferRT_*attachW_*-1;
+    std::vector<double> tipW= drillBufRT_*attachW_*-1;
     std::vector<std::vector<double> > Sw;
-    for (unsigned int i=0;i<caliN_;i++){
+    for (unsigned int i=0;i<drillBufN_;i++){
         std::vector<double> tipWi(tipW.begin()+3*i,tipW.begin()+3*i+3);
 
         std::vector<std::vector<double> > Swi= crossMat(tipWi);
@@ -184,41 +177,25 @@ std::vector<double> ft_sensor::calibrateDrillFromBuf(bool save){
             Sw.push_back(Swi.at(j));
         }
     }
-    attachP_= lsqQR(Sw,caliBufferTau_);
+    attachP_= lsqQR(Sw,drillBufTau_);
     if (save) ft_sensor::save_drillCalibration();
 
-    caliBufferF_.clear();
-    caliBufferTau_.clear();
-    caliBufferRT_.clear();
-    caliN_=0;
+    drillBufF_.clear();
+    drillBufTau_.clear();
+    drillBufRT_.clear();
+    drillBufN_=0;
     return appendVect(attachW_,attachP_);
 }
 
-//std::vector<double> ft_sensor::calibrateDrill(double calt){
-//    printf("Calibrating Payload..\n");
-
-//    for (int i=0;i<10;i++){
-//        printf("Position %d..\n",i);
-
-//        ft_sensor::calibrateDrillEpisode(R,calt);
-
-//        printf("Press Enter to Continue Or 'q' to Finish:");
-//        std::string a; std::getline(std::cin,a);
-//        if (!a.compare("q"))
-//            break;
-//    }
-
-//    return ft_sensor::calibrateDrillFromBuf();
-//}
 
 std::vector<double> ft_sensor::read_drillConfig(){
-    printf("Reading payload config file.\n");
+    printf("Reading Drill config file.\n");
     drillConfigFile_.readFile(drillConfig_path_);
     attachW_= drillConfigFile_.getXmlVect<double>("drill.weight");
     attachP_= drillConfigFile_.getXmlVect<double>("drill.position");
     attachSp_= crossMat(attachP_);
 
-    printf("Payload weight:[");
+    printf("Drill weight:[");
     for (unsigned int i=0;i<attachW_.size();i++){
         printf("%.3f, ",attachW_.at(i));
     }printf("]\n\n");
@@ -269,76 +246,137 @@ std::vector<double> ft_sensor::get_ftTipMA(){
 }
 
 
-
-void ft_sensor::setCalFtBiasMode(bool calMode){
-    return ftDriver_.setCalibrateMode(calMode);
+void ft_sensor::setSensorCalMode(bool fCalMode){
+    return ftDriver_.setCalibrateMode(fCalMode);
 }
 
-void ft_sensor::calBiasBuf(bool oppDir){
-    std::vector<double> ft_temp= ft_sensor::get_ftRaw();
-    for (unsigned int i=0;i<6;i++){
-        calBufBias_.at(i).push_back(ft_temp.at(i));
-    }
-    if (!oppDir) biasN1_++;
-    else biasN2_++;
-    return;
-}
+void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > R, double calt){
+    if (sensorBuf_.size()!=3) sensorBuf_= std::vector<std::vector<double> >(3,std::vector<double>(0,0));
+    ft_sensor::setSensorCalMode(true);
 
-std::vector<double> ft_sensor::calBiasFromBuf(){
-    std::vector<double> ftAvg= mean(calBufBias_,0)*-1;
-    ft_sensor::set_ftBias(ftAvg);
-    ftDriver_.setCalibrateMode(false);
+    std::vector<double> h_x= R*g;
+    std::vector<double> tau_x= cross(com_,h_x);
+    h_x.insert(h_x.end(),tau_x.begin(),tau_x.end());
+    std::vector<double> h_massi= massi*h_x;
 
-    for(unsigned int i=0;i<ftAvg.size();i++){
-        if (i<3) ftAvg.at(i)*=ftDriver_.getScale().at(0);
-        else ftAvg.at(i)*=ftDriver_.getScale().at(1);
-    }
-    printf("calibrated bias:[%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]\n",
-           ftAvg.at(0),ftAvg.at(1),ftAvg.at(2),ftAvg.at(3),ftAvg.at(4),ftAvg.at(5));
-
-    calBufBias_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
-    biasN1_=0;
-    biasN2_=0;
-    calBiasEp_=0;
-    return ftAvg;
-}
-
-bool ft_sensor::checkBiasBuffNEq(){
-    if (biasN1_!=biasN2_) return 0;
-    else if (biasN1_==0) return 0;
-    else return 1;
-}
-
-void ft_sensor::calBiasEpisode(double calt){
-    ftDriver_.setCalibrateMode(true);
-
-    std::chrono::high_resolution_clock::time_point t0
-            = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     double t=0;
-    while ( (!calBiasEp_&&t<calt) || (calBiasEp_&&!ft_sensor::checkBiasBuffNEq()) ){
-        t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
-        ft_sensor::calBiasBuf(calBiasEp_);
+    do{
+        sensorBuf_.at(0).insert(sensorBuf_.at(0).end(),h_massi.begin(),h_massi.end());
+        sensorBuf_.at(1).insert(sensorBuf_.at(1).end(),h_x.begin(),h_x.end());
+
+        std::vector<double> h= ft_sensor::get_ftRaw();
+        sensorBuf_.at(2).insert(sensorBuf_.at(2).end(),h.begin(),h.end());
+
+        t= std::chrono::duration_cast<std::chrono::duration<double> >(
+                    std::chrono::high_resolution_clock::now()-t0).count();
         usleep(1e3);
-    }
-    calBiasEp_++; calBiasEp_=calBiasEp_%2;
+    }while(t<calt);
     return;
 }
 
-std::vector<double> ft_sensor::calibrateFtBias(double calt){
-    ftDriver_.setCalibrateMode(true);
-
-    printf("Calibrating Ft Bias..\n");
-    for (int i=0;i<2;i++){
-        ft_sensor::calBiasEpisode(calt);
-        if (!i){
-            printf("Turn the sensor to opposite direction & Press Enter:");
-            std::string a; std::getline(std::cin,a);
-        }
+std::vector<std::vector<double> > ft_sensor::calibrateSensorFromBuf(){
+    unsigned int j=0;
+    unsigned int n=6;
+    std::vector<std::vector<double> > A(sensorBuf_.at(0).size(),std::vector<double>(2*n+j,0));
+    for (unsigned int i=0;i<sensorBuf_.at(0).size();i++){
+        A.at(i).at(i%n)= sensorBuf_.at(0).at(i);
+        A.at(i).at(i%n+n)= 1;
+        if (j==1)
+            A.at(i).back()= sensorBuf_.at(1).at(i);
     }
-    std::vector<double> bias= ft_sensor::calBiasFromBuf();
-    return bias;
+
+    std::vector<double> x= lsqQR(A,sensorBuf_.at(2));
+//    printf("err: %.4f\n",l2norm(sensorBuf_.at(2)-A*x));
+
+    std::vector<double> m_est(x.begin(),x.begin()+n);
+    std::vector<double> c_est(x.begin()+n,x.end()-j);
+//    m0= x.back();
+    for (unsigned int i=0;i<6;i++){
+        m_est.at(i)= 1.0/m_est.at(i);
+        c_est.at(i)*= m_est.at(i)*-1;
+    }
+    sensorMc_= {m_est,c_est};
+    print_matrix("sensorMc",sensorMc_);
+    ft_sensor::setSensorCalMode(false);
+    sensorBuf_.clear();
+    return sensorMc_;
 }
 
-void ft_sensor::set_ftBias(std::vector<double> bias){
-    return ftDriver_.saveBiasToConfig(bias);
+void ft_sensor::save_sensorCalibration(){
+    ftDriver_.saveCalibration(sensorMc_);
+    return;
 }
+
+//void ft_sensor::setCalFtBiasMode(bool calMode){
+//    return ftDriver_.setCalibrateMode(calMode);
+//}
+
+//void ft_sensor::calBiasBuf(bool oppDir){
+//    std::vector<double> ft_temp= ft_sensor::get_ftRaw();
+//    for (unsigned int i=0;i<6;i++){
+//        calBufBias_.at(i).push_back(ft_temp.at(i));
+//    }
+//    if (!oppDir) biasN1_++;
+//    else biasN2_++;
+//    return;
+//}
+
+//std::vector<double> ft_sensor::calBiasFromBuf(){
+//    std::vector<double> ftAvg= mean(calBufBias_,0)*-1;
+//    ft_sensor::set_ftBias(ftAvg);
+//    ftDriver_.setCalibrateMode(false);
+
+//    for(unsigned int i=0;i<ftAvg.size();i++){
+//        if (i<3) ftAvg.at(i)*=ftDriver_.getScale().at(0);
+//        else ftAvg.at(i)*=ftDriver_.getScale().at(1);
+//    }
+//    printf("calibrated bias:[%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]\n",
+//           ftAvg.at(0),ftAvg.at(1),ftAvg.at(2),ftAvg.at(3),ftAvg.at(4),ftAvg.at(5));
+
+//    calBufBias_= std::vector<std::vector<double> >(6,std::vector<double>(0,0));
+//    biasN1_=0;
+//    biasN2_=0;
+//    calBiasEp_=0;
+//    return ftAvg;
+//}
+
+//bool ft_sensor::checkBiasBuffNEq(){
+//    if (biasN1_!=biasN2_) return 0;
+//    else if (biasN1_==0) return 0;
+//    else return 1;
+//}
+
+//void ft_sensor::calBiasEpisode(double calt){
+//    ftDriver_.setCalibrateMode(true);
+
+//    std::chrono::high_resolution_clock::time_point t0
+//            = std::chrono::high_resolution_clock::now();
+//    double t=0;
+//    while ( (!calBiasEp_&&t<calt) || (calBiasEp_&&!ft_sensor::checkBiasBuffNEq()) ){
+//        t= elapsedTime<double>(t0,std::chrono::high_resolution_clock::now());
+//        ft_sensor::calBiasBuf(calBiasEp_);
+//        usleep(1e3);
+//    }
+//    calBiasEp_++; calBiasEp_=calBiasEp_%2;
+//    return;
+//}
+
+//std::vector<double> ft_sensor::calibrateFtBias(double calt){
+//    ftDriver_.setCalibrateMode(true);
+
+//    printf("Calibrating Ft Bias..\n");
+//    for (int i=0;i<2;i++){
+//        ft_sensor::calBiasEpisode(calt);
+//        if (!i){
+//            printf("Turn the sensor to opposite direction & Press Enter:");
+//            std::string a; std::getline(std::cin,a);
+//        }
+//    }
+//    std::vector<double> bias= ft_sensor::calBiasFromBuf();
+//    return bias;
+//}
+
+//void ft_sensor::set_ftBias(std::vector<double> bias){
+//    return ftDriver_.saveBiasToConfig(bias);
+//}

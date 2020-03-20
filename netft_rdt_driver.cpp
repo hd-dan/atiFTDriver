@@ -140,6 +140,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
 
   double forceCount,torqueCount;
   bias_= std::vector<double>(6,0);
+  slope_= std::vector<double>(6,0);
   configPath_= NetFTRDTDriver::checkPath(configPath_);
   if (!std::ifstream(configPath_).good()){
       address_= "192.168.1.108";
@@ -160,9 +161,19 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
           bias_= configFile_.getXmlVect<double>("ft.bias");
       for (int i=int(bias_.size());i<6;i++){
           bias_.push_back(0);
+
+      if (configFile_.checkElementExist("ft.slope"))
+          slope_= configFile_.getXmlVect<double>("ft.slope");
+      for (int i=int(slope_.size());i<6;i++){
+          slope_.push_back(0);
       }
 
       printf("Read Ft Config File\n");
+      printf("Slope: [");
+      for (unsigned int i=0;i<slope_.size();i++){
+          printf("%.2f, ",slope_.at(i));
+      }
+      printf("]\n");
       printf("Bias: [");
       for (unsigned int i=0;i<bias_.size();i++){
           printf("%.2f, ",bias_.at(i));
@@ -247,28 +258,43 @@ std::vector<double> NetFTRDTDriver::getBias(){
     return bias_;
 }
 
-void NetFTRDTDriver::setBias(std::vector<double> bias, bool calMode){
-    if (calMode){
-        for (unsigned int i=0; i<bias.size();i++){
-            double bias_i= bias.at(i);
-            if (i<3) bias_.at(i)= bias_i*force_scale_;
-            else bias_.at(i)= bias_i*torque_scale_;
-        }
-    }else{
-        for (unsigned int i=0; i<bias.size();i++){
-            double bias_i= bias.at(i);
-            bias_.at(i)= bias_.at(i)-bias_i;
-        }
-    }
+//void NetFTRDTDriver::setBias(std::vector<double> slope, std::vector<double> bias, bool calMode){
+//    if (calMode){
+//        for (unsigned int i=0; i<bias.size();i++){
+//            double bias_i= bias.at(i);
+//            if (i<3) bias_.at(i)= bias_i;
+//            else bias_.at(i)= bias_i;
+//        }
+//    }else{
+//        for (unsigned int i=0; i<bias.size();i++){
+//            double bias_i= bias.at(i);
+//            bias_.at(i)= bias_.at(i)-bias_i;
+//        }
+//    }
 
-    return;
+//    return;
+//} // <---------Need
+
+void NetFTRDTDriver::setCalibration(std::vector<std::vector<double> > mc, bool calMode){
+    if (calMode){
+        slope_= mc.at(0);
+        bias_= mc.at(1);
+    }else{
+        for (unsigned int i=0;i<bias_.size();i++)
+            bias_.at(i)+= slope_.at(i)*mc.at(1).at(i);
+        for (unsigned int i=0;i<slope_.size();i++)
+            slope_.at(i)*= mc.at(0).at(i);
+    }
 }
 
-void NetFTRDTDriver::saveBiasToConfig(){
+void NetFTRDTDriver::saveCalibration(){
     boost::property_tree::ptree pt= configFile_.getPtree();
     std::vector<std::string> strPool= {"x","y","z","tx","ty","tz"};
     for (unsigned int i=0; i<bias_.size();i++){
         pt.put("ft.bias."+strPool.at(i), bias_.at(i) );
+    }
+    for (unsigned int i=0; i<slope_.size();i++){
+        pt.put("ft.slope."+strPool.at(i), slope_.at(i) );
     }
     pt.put("ft.ip",address_);
     pt.put("ft.forceCount",int(1./force_scale_));
@@ -276,9 +302,9 @@ void NetFTRDTDriver::saveBiasToConfig(){
     configFile_.writeFile(configPath_,pt);
 }
 
-void NetFTRDTDriver::saveBiasToConfig(std::vector<double> bias){
-    NetFTRDTDriver::setBias(bias);
-    NetFTRDTDriver::saveBiasToConfig();
+void NetFTRDTDriver::saveCalibration(std::vector<std::vector<double> > mc){
+    NetFTRDTDriver::setCalibration(mc);
+    NetFTRDTDriver::saveCalibration();
     return;
 }
 
@@ -342,19 +368,19 @@ void NetFTRDTDriver::recvThreadFunc(){
         else{
 
             if (fCali_){
-                tmp_data.at(0)= rdt_record.fx_;
-                tmp_data.at(1)= rdt_record.fy_;
-                tmp_data.at(2)= rdt_record.fz_;
-                tmp_data.at(3)= rdt_record.tx_;
-                tmp_data.at(4)= rdt_record.ty_;
-                tmp_data.at(5)= rdt_record.tz_;
+                tmp_data.at(0)= rdt_record.fx_*force_scale_;
+                tmp_data.at(1)= rdt_record.fy_*force_scale_;
+                tmp_data.at(2)= rdt_record.fz_*force_scale_;
+                tmp_data.at(3)= rdt_record.tx_*torque_scale_;
+                tmp_data.at(4)= rdt_record.ty_*torque_scale_;
+                tmp_data.at(5)= rdt_record.tz_*torque_scale_;
             }else{
-                tmp_data.at(0)= double(rdt_record.fx_)*force_scale_ + bias_.at(0);
-                tmp_data.at(1)= double(rdt_record.fy_)*force_scale_ + bias_.at(1) ;
-                tmp_data.at(2)= double(rdt_record.fz_)*force_scale_ + bias_.at(2) ;
-                tmp_data.at(3)= double(rdt_record.tx_)*torque_scale_ + bias_.at(3) ;
-                tmp_data.at(4)= double(rdt_record.ty_)*torque_scale_ + bias_.at(4) ;
-                tmp_data.at(5)= double(rdt_record.tz_)*torque_scale_ + bias_.at(5) ;
+                tmp_data.at(0)= double(rdt_record.fx_)*force_scale_*slope_.at(0) + bias_.at(0);
+                tmp_data.at(1)= double(rdt_record.fy_)*force_scale_*slope_.at(1) + bias_.at(1) ;
+                tmp_data.at(2)= double(rdt_record.fz_)*force_scale_*slope_.at(2) + bias_.at(2) ;
+                tmp_data.at(3)= double(rdt_record.tx_)*torque_scale_*slope_.at(3) + bias_.at(3) ;
+                tmp_data.at(4)= double(rdt_record.ty_)*torque_scale_*slope_.at(4) + bias_.at(4) ;
+                tmp_data.at(5)= double(rdt_record.tz_)*torque_scale_*slope_.at(5) + bias_.at(5) ;
             }
 
           { boost::unique_lock<boost::mutex> lock(mutex_);
