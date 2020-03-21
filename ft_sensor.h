@@ -25,6 +25,8 @@ private:
 
     std::vector<std::vector<double> > I_;
     std::vector<std::vector<double> > sensorR_;
+    std::mutex mtxSensorR_;
+
     bool fStop_;
     void loopFt();
     boost::thread tReadFt_;
@@ -68,6 +70,7 @@ public:
     void set_drillConfigPath(std::string path);
     void bufForDrillCal();
     void episodeBufForDrillCal(std::vector<std::vector<double> >R, double calt=5);
+    void episodeBufForDrillCal(double calt=5);
     std::vector<double> calibrateDrillFromBuf(bool save=1);
     void save_drillCalibration();
 
@@ -79,6 +82,7 @@ public:
 
     void setSensorCalMode(bool fcalMode);
     void bufForSensorCal(double mi,std::vector<std::vector<double> > R, double calt=5);
+    void bufForSensorCal(double mi, double calt=5);
     std::vector<std::vector<double> > calibrateSensorFromBuf();
     void save_sensorCalibration();
 

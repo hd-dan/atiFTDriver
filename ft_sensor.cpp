@@ -76,6 +76,7 @@ void ft_sensor::setSensorQuat(std::vector<double> quat){
 }
 
 std::vector<std::vector<double> > ft_sensor::getSensorR(){
+    std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
     return sensorR_;
 }
 
@@ -136,7 +137,10 @@ void ft_sensor::loopFt(){
 
 void ft_sensor::bufForDrillCal(){
     std::vector<double> ft_temp= ft_sensor::get_ftRaw();
+
+    std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
     std::vector<std::vector<double> > R_temp= sensorR_;
+    ftLockSensorR.unlock();
 
     for (unsigned int i=0;i<6;i++){
         if (i<3){
@@ -153,8 +157,13 @@ void ft_sensor::bufForDrillCal(){
 }
 
 void ft_sensor::episodeBufForDrillCal(std::vector<std::vector<double> > R, double calt){
-    if (drillBufFt_.size()==0) drillBufFt_= std::vector<std::vector<double> >(2,std::vector<double>(0,0));
     ft_sensor::setSensorR(R);
+    ft_sensor::episodeBufForDrillCal(calt);
+    return;
+}
+
+void ft_sensor::episodeBufForDrillCal(double calt){
+    if (drillBufFt_.size()==0) drillBufFt_= std::vector<std::vector<double> >(2,std::vector<double>(0,0));
     std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     double t=0;
     while (t<calt){
@@ -256,27 +265,36 @@ void ft_sensor::setSensorCalMode(bool fCalMode){
 }
 
 void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > R, double calt){
-    if (sensorBuf_.size()!=3) sensorBuf_= std::vector<std::vector<double> >(3,std::vector<double>(0,0));
-    ft_sensor::setSensorCalMode(true);
+    ft_sensor::setSensorR(R);
+    ft_sensor::bufForSensorCal(calt);
+    return;
+}
 
-    std::vector<double> h_x= R*g;
-    std::vector<double> tau_x= cross(com_,h_x);
-    h_x.insert(h_x.end(),tau_x.begin(),tau_x.end());
-    std::vector<double> h_massi= massi*h_x;
+void ft_sensor::bufForSensorCal(double massi, double calt){
+    ft_sensor::setSensorCalMode(true);
 
     std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     double t=0;
-    do{
+    while(t<calt){
+        std::vector<double> h= ft_sensor::get_ftRaw();
+
+        std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
+        std::vector<std::vector<double> > R_temp= sensorR_;
+        ftLockSensorR.unlock();
+
+        std::vector<double> h_x= R_temp*g;
+        std::vector<double> tau_x= cross(com_,h_x);
+        h_x.insert(h_x.end(),tau_x.begin(),tau_x.end());
+        std::vector<double> h_massi= massi*h_x;
+
         sensorBuf_.at(0).insert(sensorBuf_.at(0).end(),h_massi.begin(),h_massi.end());
         sensorBuf_.at(1).insert(sensorBuf_.at(1).end(),h_x.begin(),h_x.end());
-
-        std::vector<double> h= ft_sensor::get_ftRaw();
         sensorBuf_.at(2).insert(sensorBuf_.at(2).end(),h.begin(),h.end());
 
         t= std::chrono::duration_cast<std::chrono::duration<double> >(
                     std::chrono::high_resolution_clock::now()-t0).count();
         usleep(1e3);
-    }while(t<calt);
+    }
     return;
 }
 
