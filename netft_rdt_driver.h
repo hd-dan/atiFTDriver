@@ -50,11 +50,10 @@ namespace netft_rdt_driver{
 class NetFTRDTDriver{
 public:
   // Start receiving data from NetFT device
-//  NetFTRDTDriver(const std::string &address);
+  NetFTRDTDriver();
   NetFTRDTDriver(const std::string &configPath);
-
-
   ~NetFTRDTDriver();
+  void setConfig(std::string configPath);
 
   //! Get newest RDT data from netFT device
   std::vector<double> getData();
