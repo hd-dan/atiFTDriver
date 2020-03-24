@@ -1,5 +1,8 @@
 #include "ft_sensor.h"
 
+ft_sensor::ft_sensor():fStop_(true){
+}
+
 ft_sensor::ft_sensor(std::string ftConfig_path):ftDriver_(ftConfig_path),
                                         fStop_(0){
     attachW_= std::vector<double>(3,0);
@@ -15,8 +18,28 @@ ft_sensor::ft_sensor(std::string ftConfig_path, std::string drillConfig_path):
                                         drillConfig_path_(drillConfig_path),
                                         fStop_(0){
     if (drillConfig_path_.at(0)=='~')
-        drillConfig_path_= getenv("HOME")+
-                drillConfig_path_.substr(1,drillConfig_path_.size()-1);
+        drillConfig_path_= getenv("HOME")+drillConfig_path_.substr(1);
+    fConfigExist_= std::ifstream(drillConfig_path_).good();
+    if (fConfigExist_){
+        ft_sensor::read_drillConfig();
+    }else{
+        printf("Failed to open payload config file: %s\n",drillConfig_path_.c_str());
+        attachW_= std::vector<double>(3,0);
+        attachP_= std::vector<double>(3,0);
+        attachSp_= crossMat(attachP_);
+    }
+
+    ft_sensor::initRcv();
+    return;
+}
+
+void ft_sensor::setConfig(std::string ftConfig, std::string drillConfig){
+    if (!fStop_)
+        return;
+    ftDriver_.setConfig(ftConfig);
+    drillConfig_path_= drillConfig;
+    if (drillConfig_path_.at(0)=='~')
+        drillConfig_path_= getenv("HOME")+drillConfig_path_.substr(1);
     fConfigExist_= std::ifstream(drillConfig_path_).good();
     if (fConfigExist_){
         ft_sensor::read_drillConfig();

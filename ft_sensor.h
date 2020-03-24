@@ -58,9 +58,11 @@ private:
 //    int calBiasEp_;
 
 public:
+    ft_sensor();
     ft_sensor(std::string ftConfig);
     ft_sensor(std::string ftConfig, std::string drillConfig);
     ~ft_sensor();
+    void setConfig(std::string ftConfig, std::string drillConfig);
 
     void setSensorR(std::vector<std::vector<double> > R);
     void setSensorQuat(std::vector<double> quat);
