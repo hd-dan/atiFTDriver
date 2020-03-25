@@ -9,6 +9,7 @@ SOURCES += \
         main.cpp \
     ft_sensor.cpp \
     netft_rdt_driver.cpp \
+    ../dataFile/data_file.cpp \
     ../dataFile/xml_file.cpp \
     ../commun/tcpcom.cpp \
     ../commun/serialcom.cpp \
@@ -16,6 +17,7 @@ SOURCES += \
 HEADERS += \
     ft_sensor.h \
     netft_rdt_driver.h \
+    ../dataFile/data_file.h \
     ../dataFile/xml_file.h \
     ../util/util.hpp \
     ../commun/tcpcom.h \

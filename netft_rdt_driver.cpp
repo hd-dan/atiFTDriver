@@ -272,7 +272,6 @@ std::string NetFTRDTDriver::processPath(std::string path){
 //        std::string pwd= getenv("PWD");
         char tuh[PATH_MAX];
         std::string pwd=getcwd(tuh,sizeof(tuh));
-        pwd= pwd.substr(0,pwd.rfind("/"));
         do{
             pwd= pwd.substr(0,pwd.rfind("/"));
             path= path.substr(path.find("..")+2);
@@ -429,12 +428,12 @@ void NetFTRDTDriver::recvThreadFunc(){
                 tmp_data.at(4)= rdt_record.ty_*torque_scale_;
                 tmp_data.at(5)= rdt_record.tz_*torque_scale_;
             }else{
-                tmp_data.at(0)= double(rdt_record.fx_)*force_scale_*slope_.at(0) + bias_.at(0);
-                tmp_data.at(1)= double(rdt_record.fy_)*force_scale_*slope_.at(1) + bias_.at(1) ;
-                tmp_data.at(2)= double(rdt_record.fz_)*force_scale_*slope_.at(2) + bias_.at(2) ;
-                tmp_data.at(3)= double(rdt_record.tx_)*torque_scale_*slope_.at(3) + bias_.at(3) ;
-                tmp_data.at(4)= double(rdt_record.ty_)*torque_scale_*slope_.at(4) + bias_.at(4) ;
-                tmp_data.at(5)= double(rdt_record.tz_)*torque_scale_*slope_.at(5) + bias_.at(5) ;
+                tmp_data.at(0)= ( force_scale_*double(rdt_record.fx_) + bias_.at(0) ) *slope_.at(0);
+                tmp_data.at(1)= ( force_scale_*double(rdt_record.fy_) + bias_.at(1) ) *slope_.at(1);
+                tmp_data.at(2)= ( force_scale_*double(rdt_record.fz_) + bias_.at(2) ) *slope_.at(2);
+                tmp_data.at(3)= ( torque_scale_*double(rdt_record.tx_) + bias_.at(3) ) *slope_.at(3);
+                tmp_data.at(4)= ( torque_scale_*double(rdt_record.ty_) + bias_.at(4) ) *slope_.at(4);
+                tmp_data.at(5)= ( torque_scale_*double(rdt_record.tz_) + bias_.at(5) ) *slope_.at(5);
             }
 
           { boost::unique_lock<boost::mutex> lock(mutex_);

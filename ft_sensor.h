@@ -2,6 +2,7 @@
 #define FT_SENSOR_H
 
 #include "../util/util.hpp"
+#include "../dataFile/data_file.h"
 #include "../dataFile/xml_file.h"
 #include "netft_rdt_driver.h"
 
@@ -19,6 +20,9 @@ private:
     std::string processPath(std::string path);
     void processDirectory(std::string dir);
     void initRcv();
+
+    data_file recorder_calSensor_;
+    data_file recorder_calDrill_;
 
     std::vector<double> attachW_; //w_= 0w
     std::vector<double> attachP_; //p_= tipP_com
