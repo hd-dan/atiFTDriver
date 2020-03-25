@@ -334,76 +334,146 @@ void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > 
 }
 
 void ft_sensor::bufForSensorCal(double massi, double calt){
-    if (sensorBuf_.size()!=3){
-        sensorBuf_= std::vector<std::vector<double> >(3,std::vector<double>(0,0));
+    if (sensorBuf_.size()!=6){
+        sensorBuf_= std::vector<std::vector<double> >(13,std::vector<double>(0,0));
 
         recorder_calSensor_.openFile("~/Desktop/calRecord.csv");
         recorder_calSensor_.header("mass");
         recorder_calSensor_.header("h",std::vector<double>(6,0));
-        recorder_calSensor_.header("R_row1",std::vector<double>(3,0));
-        recorder_calSensor_.header("R_row2",std::vector<double>(3,0));
         recorder_calSensor_.header("R_row3",std::vector<double>(3,0));
+        recorder_calSensor_.header("R_row2",std::vector<double>(3,0));
+        recorder_calSensor_.header("R_row1",std::vector<double>(3,0));
         recorder_calSensor_.endLine();
     }
     ft_sensor::setSensorCalMode(true);
 
+    int n=0;
+    std::vector<double> h_avg(6,0);
     std::vector<double> g= {0,0,9.81};
+//    double g= 9.81;
+
+    std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
+    std::vector<std::vector<double> > R_temp= sensorR_;
+    ftLockSensorR.unlock();
+
     double t=0;
     std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     while(t<calt){
         std::vector<double> h= ft_sensor::get_ftRaw();
 
-        std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
-        std::vector<std::vector<double> > R_temp= sensorR_;
-        ftLockSensorR.unlock();
+        for (unsigned int i=0;i<h_avg.size();i++){
+            h_avg.at(i)+=h.at(i);
+        }
+        n++;
 
-        recorder_calSensor_.write(massi);
-        recorder_calSensor_.write(h);
-        for (unsigned int i=0;i<R_temp.size();i++)
-            recorder_calSensor_.write(R_temp.at(i));
-        recorder_calSensor_.endLine();
+//        std::vector<double> h_x= transpose(R_temp)*g;
+//        std::vector<double> tau_x= cross(com_,h_x);
+//        h_x.insert(h_x.end(),tau_x.begin(),tau_x.end());
+//        std::vector<double> h_massi= massi*h_x;
 
-        std::vector<double> h_x= R_temp*g;
-        std::vector<double> tau_x= cross(com_,h_x);
-        h_x.insert(h_x.end(),tau_x.begin(),tau_x.end());
-        std::vector<double> h_massi= massi*h_x;
-
-        sensorBuf_.at(0).insert(sensorBuf_.at(0).end(),h_massi.begin(),h_massi.end());
-        sensorBuf_.at(1).insert(sensorBuf_.at(1).end(),h_x.begin(),h_x.end());
-        sensorBuf_.at(2).insert(sensorBuf_.at(2).end(),h.begin(),h.end());
+//        sensorBuf_.at(0).insert(sensorBuf_.at(0).end(),h_massi.begin(),h_massi.end());
+//        sensorBuf_.at(1).insert(sensorBuf_.at(1).end(),h_x.begin(),h_x.end());
+//        sensorBuf_.at(2).insert(sensorBuf_.at(2).end(),h.begin(),h.end());
 
         t= std::chrono::duration_cast<std::chrono::duration<double> >(
                     std::chrono::high_resolution_clock::now()-t0).count();
         usleep(1e5);
     }
+
+    std::vector<double> f_x= transpose(R_temp)*g;
+    for (unsigned int i=0;i<f_x.size();i++){
+        sensorBuf_.at(i).push_back( f_x.at(i) );
+    }
+    std::vector<double> tau_x= cross(com_,f_x);
+    for (unsigned int i=0;i<tau_x.size();i++){
+        sensorBuf_.at(3+i).push_back( tau_x.at(i) );
+    }
+    for (unsigned int i=0;i<h_avg.size();i++){
+        h_avg.at(i)*= (1./n);
+        sensorBuf_.at(6+i).push_back( h_avg.at(i) );
+    }
+    sensorBuf_.at(12).push_back( massi );
+
+
+    recorder_calSensor_.write(massi);
+    recorder_calSensor_.write(h_avg);
+    for (unsigned int i=0;i<R_temp.size();i++)
+        recorder_calSensor_.write(R_temp.at(R_temp.size()-i));
+    recorder_calSensor_.endLine();
+
     return;
 }
 
 std::vector<std::vector<double> > ft_sensor::calibrateSensorFromBuf(){
-    unsigned int j=0;
-    unsigned int n=6;
-    std::vector<std::vector<double> > A(sensorBuf_.at(0).size(),std::vector<double>(2*n+j,0));
-    for (unsigned int i=0;i<sensorBuf_.at(0).size();i++){
-        A.at(i).at(i%n)= sensorBuf_.at(0).at(i);
-        A.at(i).at(i%n+n)= 1;
-        if (j==1)
-            A.at(i).back()= sensorBuf_.at(1).at(i);
-    }
+//    unsigned int j=0;
+//    unsigned int n=6;
+//    std::vector<std::vector<double> > A(sensorBuf_.at(0).size(),std::vector<double>(2*n+j,0));
+//    for (unsigned int i=0;i<sensorBuf_.at(0).size();i++){
+//        A.at(i).at(i%n)= sensorBuf_.at(0).at(i);
+//        A.at(i).at(i%n+n)= 1;
+//        if (j==1)
+//            A.at(i).back()= sensorBuf_.at(1).at(i);
+//    }
 
-    std::vector<double> x= lsqQR(A,sensorBuf_.at(2));
-//    printf("err: %.4f\n",l2norm(sensorBuf_.at(2)-A*x));
+//    std::vector<double> x= lsqQR(A,sensorBuf_.at(2));
+////    printf("err: %.4f\n",l2norm(sensorBuf_.at(2)-A*x));
 
-    std::vector<double> m_est(x.begin(),x.begin()+n);
-    std::vector<double> c_est(x.begin()+n,x.end()-j);
-//    m0= x.back();
+//    std::vector<double> m_est(x.begin(),x.begin()+n);
+//    std::vector<double> c_est(x.begin()+n,x.end()-j);
+////    m0= x.back();
+//    for (unsigned int i=0;i<6;i++){
+//        m_est.at(i)= 1.0/m_est.at(i);
+//        c_est.at(i)*= m_est.at(i)*-1;
+//    }
+
+    std::vector<double> m_est(6,0);
+    std::vector<double> c_est(6,0);
+
     for (unsigned int i=0;i<6;i++){
-        m_est.at(i)= 1.0/m_est.at(i);
-        c_est.at(i)*= m_est.at(i)*-1;
+
+        std::vector<double> hDiff(0,0);
+        std::vector<double> wDiff(0,0);
+        double slope=0;
+        int n=0;
+        double bias=0;
+        int nb=0;
+        printf("slope%d: ",i);
+        for (unsigned int j=0;j<sensorBuf_.at(i).size()-1;j++){
+            if (fabs(sensorBuf_.at(i).at(j))<1e-2){
+                bias+= sensorBuf_.at(6+i).at(j);
+                nb++;
+                continue;
+            }
+            for (unsigned int k=j+1;k<sensorBuf_.at(i).size();k++){
+                if (fabs(sensorBuf_.at(i).at(k))<1e-2)
+                    continue;
+                if (fabs(sensorBuf_.at(i).at(k)-sensorBuf_.at(i).at(k))>1e-3)
+                    continue;
+
+                wDiff.push_back( sensorBuf_.at(i).at(k)*sensorBuf_.back().at(k)
+                                    -sensorBuf_.at(i).at(j)*sensorBuf_.back().at(j) );
+                hDiff.push_back( sensorBuf_.at(6+i).at(k)-sensorBuf_.at(6+i).at(j) );
+                slope+= wDiff.back()/hDiff.back();
+                printf(" %.3f, ",wDiff.back()/hDiff.back());
+            }
+        }
+        printf("\n");
+        m_est.at(i)= 1.*slope/n;
+        c_est.at(i)= 1.*bias/nb;
+
+        printf("bias%d: ",i);
+        for (unsigned int j=0;j<sensorBuf_.at(i).size();j++){
+            if (fabs(sensorBuf_.at(i).at(j))<1e-2){
+                printf(" %.3f, ",sensorBuf_.at(6+i).at(j));
+                continue;
+            }
+        }
+        printf("\n\n");
     }
+
     sensorMc_= {m_est,c_est};
-    print_matrix("sensorMc",sensorMc_);
     ft_sensor::setSensorCalMode(false);
-    ft_sensor::save_sensorCalibration();
+    print_matrix("mc",sensorMc_);
     sensorBuf_.clear();
     return sensorMc_;
 }

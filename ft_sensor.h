@@ -1,6 +1,7 @@
 #ifndef FT_SENSOR_H
 #define FT_SENSOR_H
 
+#include <math.h>
 #include "../util/util.hpp"
 #include "../dataFile/data_file.h"
 #include "../dataFile/xml_file.h"
