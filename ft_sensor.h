@@ -16,6 +16,8 @@ private:
     bool fConfigExist_;
     std::string drillConfig_path_;
     xml_file drillConfigFile_;
+    std::string processPath(std::string path);
+    void processDirectory(std::string dir);
     void initRcv();
 
     std::vector<double> attachW_; //w_= 0w

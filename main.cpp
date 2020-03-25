@@ -50,13 +50,30 @@ void calFt(){
 }
 
 
+void testFt(){
+    std::string ftConfig= "../../atiFTDriver/config/ftConfig.xml";
+    std::string drillConfig= "../../atiFTDriver/config/drillConfig.xml";
+
+    ft_sensor ft;
+    ft.setConfig(ftConfig,drillConfig);
+
+    for (int i=0;i<100;i++){
+        print_vector("ft",ft.get_ftRaw());
+        usleep(1e4);
+    }
+
+    printf("end\n");
+    return;
+}
 
 int main(){
     std::cout << "Hello World!" << std::endl;
 
     /// yellow: x-axis | blue: y-axis
-    readFt();
+//    readFt();
 //    calFt();
+
+    testFt();
 
     return 0;
 }

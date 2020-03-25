@@ -37,9 +37,7 @@ void ft_sensor::setConfig(std::string ftConfig, std::string drillConfig){
     if (!fStop_)
         return;
     ftDriver_.setConfig(ftConfig);
-    drillConfig_path_= drillConfig;
-    if (drillConfig_path_.at(0)=='~')
-        drillConfig_path_= getenv("HOME")+drillConfig_path_.substr(1);
+    drillConfig_path_= ft_sensor::processPath(drillConfig);
     fConfigExist_= std::ifstream(drillConfig_path_).good();
     if (fConfigExist_){
         ft_sensor::read_drillConfig();
@@ -51,6 +49,36 @@ void ft_sensor::setConfig(std::string ftConfig, std::string drillConfig){
     }
 
     ft_sensor::initRcv();
+    return;
+}
+std::string ft_sensor::processPath(std::string path){
+    if (path.at(0)=='~')
+        path= getenv("HOME")+path.substr(1);
+    if (path.find("..")==0){
+//        std::string pwd= getenv("PWD");
+        char tuh[PATH_MAX];
+        std::string pwd=getcwd(tuh,sizeof(tuh));
+        pwd= pwd.substr(0,pwd.rfind("/"));
+        do{
+            pwd= pwd.substr(0,pwd.rfind("/"));
+            path= path.substr(path.find("..")+2);
+        }while(path.find("..")<2);
+        path= pwd+path;
+
+    }else if(path.at(0)=='.')
+        path= getenv("PWD")+path.substr(1);
+    if (path.find("/")==path.npos)
+        path= getenv("PWD")+std::string("/")+path;
+    ft_sensor::processDirectory(path);
+    return path;
+}
+void ft_sensor::processDirectory(std::string dir){
+    dir= dir.substr(0,dir.rfind('/'));
+    struct stat st;
+    if (stat(dir.c_str(),&st)!=0){
+        ft_sensor::processDirectory(dir);
+        mkdir(dir.c_str(),S_IRWXU);
+    }
     return;
 }
 

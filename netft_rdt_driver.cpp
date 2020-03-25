@@ -138,94 +138,7 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
   last_rdt_sequence_(0),
   system_status_(0){
 
-  double forceCount,torqueCount;
-  bias_= std::vector<double>(6,0);
-  slope_= std::vector<double>(6,0);
-  calibration_com_= {0.2,0.2,0.5};
-  configPath_= NetFTRDTDriver::checkPath(configPath_);
-  if (!std::ifstream(configPath_).good()){
-      address_= "192.168.1.108";
-      forceCount = 10000000;
-      torqueCount = 10000000;
-      slope_= std::vector<double>(6,1);
-      bias_= std::vector<double>(6,0);
-      calibration_com_= std::vector<double>(3,0);
-
-      printf("Config File not exist!\n"
-             "Default ft ip= %s\n"
-             "Count_per_force: %.0f | Count_per_torque: %.0f\n",
-             address_.c_str(),forceCount,torqueCount);
-  }else{
-      configFile_= xml_file(configPath_);
-      address_= configFile_.getXmlVal<std::string>("ft.ip");
-      forceCount= configFile_.getXmlVal<double>("ft.forceCount",1e6);
-      torqueCount= configFile_.getXmlVal<double>("ft.torqueCount",1e6);
-
-      if (configFile_.checkElementExist("ft.bias"))
-          bias_= configFile_.getXmlVect<double>("ft.bias");
-      else
-          bias_= std::vector<double>(6,0);
-      for (int i=int(bias_.size());i<6;i++)
-          bias_.push_back(0);
-
-      if (configFile_.checkElementExist("ft.slope"))
-          slope_= configFile_.getXmlVect<double>("ft.slope");
-      else
-          slope_= std::vector<double>(6,1);
-      for (int i=int(slope_.size());i<6;i++)
-          slope_.push_back(1);
-
-      if (configFile_.checkElementExist("ft.com4cal"))
-          calibration_com_= configFile_.getXmlVect<double>("ft.com4cal");
-      for (int i=int(calibration_com_.size());i<3;i++)
-          calibration_com_.push_back(0);
-
-      printf("Read Ft Config File\n");
-      printf("Slope: [");
-      for (unsigned int i=0;i<slope_.size();i++)
-          printf("%.2f, ",slope_.at(i));
-      printf("]\n");
-      printf("Bias: [");
-      for (unsigned int i=0;i<bias_.size();i++)
-          printf("%.2f, ",bias_.at(i));
-      printf("]\n");
-//      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
-  }
-
-  // Construct UDP socket
-  udp::endpoint netft_endpoint( boost::asio::ip::address_v4::from_string(address_), RDT_PORT);
-  socket_.open(udp::v4());
-  socket_.connect(netft_endpoint);
-  
-  // TODO : Get/Set Force/Torque scale for device
-  // Force/Sclae is based on counts per force/torque value from device
-  // these value are manually read from device webserver, but in future they 
-  // may be collected using http get requests
-//  static const double counts_per_force = 1000000;
-//  static const double counts_per_torque = 1000000;
-
-  static const double counts_per_force = forceCount;
-  static const double counts_per_torque = torqueCount;
-  force_scale_ = 1.0 / counts_per_force;
-  torque_scale_ = 1.0 / counts_per_torque;
-  printf("force_scale: %.9f | torque_scale: %.9f\n",force_scale_,torque_scale_);
-
-  // Start receive thread  
-  recv_thread_ = boost::thread(&NetFTRDTDriver::recvThreadFunc, this);
-
-  // Since start steaming command is sent with UDP packet,
-  // the packet could be lost, retry startup 10 times before giving up
-  for (int i=0; i<10; ++i){
-    startStreaming();
-    if (waitForNewData())
-      break;
-  }
-  { boost::unique_lock<boost::mutex> lock(mutex_);
-    if (packet_count_ == 0){
-      throw std::runtime_error("No data received from NetFT device");
-    }
-  }
-
+  NetFTRDTDriver::setConfig(configPath);
 }
 
 NetFTRDTDriver::~NetFTRDTDriver(){
@@ -261,98 +174,127 @@ NetFTRDTDriver::NetFTRDTDriver() :
 }
 
 void NetFTRDTDriver::setConfig(std::string configPath){
-  double forceCount,torqueCount;
-  bias_= std::vector<double>(6,0);
-  slope_= std::vector<double>(6,0);
-  calibration_com_= {0.2,0.2,0.5};
-  configPath_= NetFTRDTDriver::checkPath(configPath);
-  if (!std::ifstream(configPath_).good()){
-      address_= "192.168.1.108";
-      forceCount = 10000000;
-      torqueCount = 10000000;
+    configPath_= configPath;
 
-      printf("Config File not exist!\n"
-             "Default ft ip= %s\n"
-             "Count_per_force: %.0f | Count_per_torque: %.0f\n",
-             address_.c_str(),forceCount,torqueCount);
-  }else{
-      configFile_= xml_file(configPath_);
-      address_= configFile_.getXmlVal<std::string>("ft.ip");
-      forceCount= configFile_.getXmlVal<double>("ft.forceCount",1e6);
-      torqueCount= configFile_.getXmlVal<double>("ft.torqueCount",1e6);
+    double forceCount,torqueCount;
+    bias_= std::vector<double>(6,0);
+    slope_= std::vector<double>(6,0);
+    calibration_com_= {0.2,0.2,0.5};
+    configPath_= NetFTRDTDriver::processPath(configPath_);
+    if (!std::ifstream(configPath_).good()){
+        address_= "192.168.1.108";
+        forceCount = 10000000;
+        torqueCount = 10000000;
+        slope_= std::vector<double>(6,1);
+        bias_= std::vector<double>(6,0);
+        calibration_com_= std::vector<double>(3,0);
 
-      if (configFile_.checkElementExist("ft.bias"))
-          bias_= configFile_.getXmlVect<double>("ft.bias");
-      for (int i=int(bias_.size());i<6;i++)
-          bias_.push_back(0);
+        printf("Config File not exist!\n"
+               "Default ft ip= %s\n"
+               "Count_per_force: %.0f | Count_per_torque: %.0f\n",
+               address_.c_str(),forceCount,torqueCount);
+    }else{
+        configFile_= xml_file(configPath_);
+        address_= configFile_.getXmlVal<std::string>("ft.ip");
+        forceCount= configFile_.getXmlVal<double>("ft.forceCount",1e6);
+        torqueCount= configFile_.getXmlVal<double>("ft.torqueCount",1e6);
 
-      if (configFile_.checkElementExist("ft.slope"))
-          slope_= configFile_.getXmlVect<double>("ft.slope");
-      for (int i=int(slope_.size());i<6;i++)
-          slope_.push_back(0);
+        if (configFile_.checkElementExist("ft.bias"))
+            bias_= configFile_.getXmlVect<double>("ft.bias");
+        else
+            bias_= std::vector<double>(6,0);
+        for (int i=int(bias_.size());i<6;i++)
+            bias_.push_back(0);
 
-      if (configFile_.checkElementExist("ft.com4cal"))
-          calibration_com_= configFile_.getXmlVect<double>("ft.com4cal");
-      for (int i=int(calibration_com_.size());i<3;i++)
-          calibration_com_.push_back(0);
+        if (configFile_.checkElementExist("ft.slope"))
+            slope_= configFile_.getXmlVect<double>("ft.slope");
+        else
+            slope_= std::vector<double>(6,1);
+        for (int i=int(slope_.size());i<6;i++)
+            slope_.push_back(1);
 
-      printf("Read Ft Config File\n");
-      printf("Slope: [");
-      for (unsigned int i=0;i<slope_.size();i++)
-          printf("%.2f, ",slope_.at(i));
-      printf("]\n");
-      printf("Bias: [");
-      for (unsigned int i=0;i<bias_.size();i++)
-          printf("%.2f, ",bias_.at(i));
-      printf("]\n");
-//      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
-  }
+        if (configFile_.checkElementExist("ft.com4cal"))
+            calibration_com_= configFile_.getXmlVect<double>("ft.com4cal");
+        for (int i=int(calibration_com_.size());i<3;i++)
+            calibration_com_.push_back(0);
 
-  // Construct UDP socket
-  udp::endpoint netft_endpoint( boost::asio::ip::address_v4::from_string(address_), RDT_PORT);
-  socket_.open(udp::v4());
-  socket_.connect(netft_endpoint);
-
-  // TODO : Get/Set Force/Torque scale for device
-  // Force/Sclae is based on counts per force/torque value from device
-  // these value are manually read from device webserver, but in future they
-  // may be collected using http get requests
-//  static const double counts_per_force = 1000000;
-//  static const double counts_per_torque = 1000000;
-
-  static const double counts_per_force = forceCount;
-  static const double counts_per_torque = torqueCount;
-  force_scale_ = 1.0 / counts_per_force;
-  torque_scale_ = 1.0 / counts_per_torque;
-  printf("force_scale: %.9f | torque_scale: %.9f\n",force_scale_,torque_scale_);
-
-  // Start receive thread
-  recv_thread_ = boost::thread(&NetFTRDTDriver::recvThreadFunc, this);
-
-  // Since start steaming command is sent with UDP packet,
-  // the packet could be lost, retry startup 10 times before giving up
-  for (int i=0; i<10; ++i){
-    startStreaming();
-    if (waitForNewData())
-      break;
-  }
-  { boost::unique_lock<boost::mutex> lock(mutex_);
-    if (packet_count_ == 0){
-      throw std::runtime_error("No data received from NetFT device");
+        printf("Read Ft Config File\n");
+        printf("Slope: [");
+        for (unsigned int i=0;i<slope_.size();i++)
+            printf("%.2f, ",slope_.at(i));
+        printf("]\n");
+        printf("Bias: [");
+        for (unsigned int i=0;i<bias_.size();i++)
+            printf("%.2f, ",bias_.at(i));
+        printf("]\n");
+  //      printf("Force Count: %.f | Torque Count: %.f\n",forceCount, torqueCount);
     }
-  }
+
+    // Construct UDP socket
+    udp::endpoint netft_endpoint( boost::asio::ip::address_v4::from_string(address_), RDT_PORT);
+    socket_.open(udp::v4());
+    socket_.connect(netft_endpoint);
+
+    // TODO : Get/Set Force/Torque scale for device
+    // Force/Sclae is based on counts per force/torque value from device
+    // these value are manually read from device webserver, but in future they
+    // may be collected using http get requests
+  //  static const double counts_per_force = 1000000;
+  //  static const double counts_per_torque = 1000000;
+
+    static const double counts_per_force = forceCount;
+    static const double counts_per_torque = torqueCount;
+    force_scale_ = 1.0 / counts_per_force;
+    torque_scale_ = 1.0 / counts_per_torque;
+    printf("force_scale: %.9f | torque_scale: %.9f\n",force_scale_,torque_scale_);
+
+    // Start receive thread
+    recv_thread_ = boost::thread(&NetFTRDTDriver::recvThreadFunc, this);
+
+    // Since start steaming command is sent with UDP packet,
+    // the packet could be lost, retry startup 10 times before giving up
+    for (int i=0; i<10; ++i){
+      startStreaming();
+      if (waitForNewData())
+        break;
+    }
+    { boost::unique_lock<boost::mutex> lock(mutex_);
+      if (packet_count_ == 0){
+        throw std::runtime_error("No data received from NetFT device");
+      }
+    }
 }
 
-std::string NetFTRDTDriver::checkPath(std::string path){
+std::string NetFTRDTDriver::processPath(std::string path){
     if (path.at(0)=='~')
-        path= getenv("HOME") + path.substr(1);
+        path= getenv("HOME")+path.substr(1);
+    if (path.find("..")==0){
+//        std::string pwd= getenv("PWD");
+        char tuh[PATH_MAX];
+        std::string pwd=getcwd(tuh,sizeof(tuh));
+        pwd= pwd.substr(0,pwd.rfind("/"));
+        do{
+            pwd= pwd.substr(0,pwd.rfind("/"));
+            path= path.substr(path.find("..")+2);
+        }while(path.find("..")<2);
+        path= pwd+path;
 
-    std::string dir= path.substr(0,path.find_last_of('/'));
+    }else if(path.at(0)=='.')
+        path= getenv("PWD")+path.substr(1);
+    if (path.find("/")==path.npos)
+        path= getenv("PWD")+std::string("/")+path;
+    configPath_= path;
+    NetFTRDTDriver::processDirectory(configPath_);
+    return configPath_;
+}
+void NetFTRDTDriver::processDirectory(std::string dir){
+    dir= dir.substr(0,dir.rfind('/'));
     struct stat st;
     if (stat(dir.c_str(),&st)!=0){
+        NetFTRDTDriver::processDirectory(dir);
         mkdir(dir.c_str(),S_IRWXU);
     }
-    return path;
+    return;
 }
 
 std::vector<double> NetFTRDTDriver::getCom(){

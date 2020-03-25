@@ -91,7 +91,8 @@ protected:
   std::string address_;
   bool fCali_;
 
-  std::string checkPath(std::string path);
+  std::string processPath(std::string path);
+  void processDirectory(std::string dir);
 
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
