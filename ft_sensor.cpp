@@ -296,8 +296,9 @@ void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > 
 void ft_sensor::bufForSensorCal(double massi, double calt){
     ft_sensor::setSensorCalMode(true);
 
-    std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
+    std::vector<double> g= {0,0,9.81};
     double t=0;
+    std::chrono::high_resolution_clock::time_point t0= std::chrono::high_resolution_clock::now();
     while(t<calt){
         std::vector<double> h= ft_sensor::get_ftRaw();
 

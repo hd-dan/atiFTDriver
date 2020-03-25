@@ -147,6 +147,9 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
       address_= "192.168.1.108";
       forceCount = 10000000;
       torqueCount = 10000000;
+      slope_= std::vector<double>(6,1);
+      bias_= std::vector<double>(6,0);
+      calibration_com_= std::vector<double>(3,0);
 
       printf("Config File not exist!\n"
              "Default ft ip= %s\n"
@@ -160,13 +163,17 @@ NetFTRDTDriver::NetFTRDTDriver(const std::string &configPath) :
 
       if (configFile_.checkElementExist("ft.bias"))
           bias_= configFile_.getXmlVect<double>("ft.bias");
+      else
+          bias_= std::vector<double>(6,0);
       for (int i=int(bias_.size());i<6;i++)
           bias_.push_back(0);
 
       if (configFile_.checkElementExist("ft.slope"))
           slope_= configFile_.getXmlVect<double>("ft.slope");
+      else
+          slope_= std::vector<double>(6,1);
       for (int i=int(slope_.size());i<6;i++)
-          slope_.push_back(0);
+          slope_.push_back(1);
 
       if (configFile_.checkElementExist("ft.com4cal"))
           calibration_com_= configFile_.getXmlVect<double>("ft.com4cal");
