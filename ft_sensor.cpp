@@ -329,28 +329,26 @@ void ft_sensor::setSensorCalMode(bool fCalMode){
 
 void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > R, double calt){
     ft_sensor::setSensorR(R);
-    ft_sensor::bufForSensorCal(calt);
+    ft_sensor::bufForSensorCal(massi,calt);
     return;
 }
 
 void ft_sensor::bufForSensorCal(double massi, double calt){
-    if (sensorBuf_.size()!=6){
+    if (sensorBuf_.size()!=13){
         sensorBuf_= std::vector<std::vector<double> >(13,std::vector<double>(0,0));
 
         recorder_calSensor_.openFile("~/Desktop/calRecord.csv");
         recorder_calSensor_.header("mass");
         recorder_calSensor_.header("h",std::vector<double>(6,0));
         recorder_calSensor_.header("R_row3",std::vector<double>(3,0));
-        recorder_calSensor_.header("R_row2",std::vector<double>(3,0));
-        recorder_calSensor_.header("R_row1",std::vector<double>(3,0));
         recorder_calSensor_.endLine();
     }
     ft_sensor::setSensorCalMode(true);
 
     int n=0;
     std::vector<double> h_avg(6,0);
-    std::vector<double> g= {0,0,9.81};
-//    double g= 9.81;
+//    std::vector<double> g= {0,0,9.81};
+    double g= 9.81;
 
     std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
     std::vector<std::vector<double> > R_temp= sensorR_;
@@ -380,7 +378,8 @@ void ft_sensor::bufForSensorCal(double massi, double calt){
         usleep(1e5);
     }
 
-    std::vector<double> f_x= transpose(R_temp)*g;
+//    std::vector<double> f_x= transpose(R_temp)*g;
+    std::vector<double> f_x= R_temp.back()*g;
     for (unsigned int i=0;i<f_x.size();i++){
         sensorBuf_.at(i).push_back( f_x.at(i) );
     }
@@ -397,8 +396,7 @@ void ft_sensor::bufForSensorCal(double massi, double calt){
 
     recorder_calSensor_.write(massi);
     recorder_calSensor_.write(h_avg);
-    for (unsigned int i=0;i<R_temp.size();i++)
-        recorder_calSensor_.write(R_temp.at(R_temp.size()-i));
+    recorder_calSensor_.write(R_temp.back());
     recorder_calSensor_.endLine();
 
     return;
@@ -455,6 +453,7 @@ std::vector<std::vector<double> > ft_sensor::calibrateSensorFromBuf(){
                 hDiff.push_back( sensorBuf_.at(6+i).at(k)-sensorBuf_.at(6+i).at(j) );
                 slope+= wDiff.back()/hDiff.back();
                 printf(" %.3f, ",wDiff.back()/hDiff.back());
+                n++;
             }
         }
         printf("\n");
