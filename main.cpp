@@ -151,21 +151,25 @@ void calFromData(){
 
     calData= transpose(calData);
     for (unsigned int i=0;i<calData.at(0).size()-1;i++){
-        int k=calData.size();
+        unsigned int k=calData.size();
         std::vector<double> r3_i(3,0);
-        for (int p=3;p>0;p--)
+        for (unsigned int p=3;p>0;p--)
             r3_i.at(p-1)= calData.at(--k).at(i);
         std::vector<double> h_i(6,0);
-        for (int p=6;p>0;p--)
+        for (unsigned int p=6;p>0;p--)
             h_i.at(p-1)= calData.at(--k).at(i);
         double massi= calData.at(--k).at(i);
 
 
         for (unsigned int j=i+1;j<calData.at(0).size();j++){
-            int k=calData.size();
+            k= calData.size();
             std::vector<double> r3_j(3,0);
-            for (int p=3;p>0;p--)
+            for (unsigned int p=3;p>0;p--)
                 r3_j.at(p-1)= calData.at(--k).at(j);
+            std::vector<double> h_j(6,0);
+            for (unsigned int p=6;p>0;p--)
+                h_j.at(p-1)= calData.at(--k).at(j);
+            double massj= calData.at(--k).at(j);
 
             if (l2norm(r3_j-r3_i)>1e-3){
 //                print_matrix("mcBuf",mcBuf);
@@ -173,36 +177,28 @@ void calFromData(){
                 continue;
             }
 
-            std::vector<double> h_j(6,0);
-            for (int p=6;p>0;p--)
-                h_j.at(p-1)= calData.at(--k).at(j);
-            double massj= calData.at(--k).at(j);
-
-            std::vector<double> wDiff= 9.81*(r3_j*massj-r3_i*massi);
             std::vector<double> hDiff= h_j-h_i;
-            for(unsigned ax=0;ax<3;ax++){
-                if (fabs(r3_i.at(ax))<1e-2){
-                    mcBuf.at(ax+6).push_back(0.5*(h_j.at(ax)+h_i.at(ax)));
-                }else{
-                    if (fabs(hDiff.at(ax))>1e-3){
-                        mcBuf.at(ax).push_back( wDiff.at(ax)/hDiff.at(ax) );
-//                        if (fabs(mcBuf.at(ax).back())>1){
-//                        printf("i:%d, j:%d |axis:%d\n",i,j,ax);
-//                        printf("massi:%.3f, massj:%.3f\n",massi,massj);
-//                        print_vector("hDiff",hDiff);
-//                        print_vector("wDiff",wDiff);
-//                        printf("slope: %.3f\n\n",wDiff.at(ax)/hDiff.at(ax));
-//                        return;
-//                        }
-                    }
+            std::vector<double> wDiff= 9.81*(r3_j*massj-r3_i*massi);
+            std::vector<double> tauDiff= cross(com_,wDiff);
+            wDiff.insert(wDiff.end(),tauDiff.begin(),tauDiff.end());
+            for(unsigned ax=0;ax<6;ax++){
+//                printf("ax:%d\n",ax);
+                if (fabs(r3_i.at(ax%3))<1e-2){
+                    mcBuf.at(ax+6).push_back(-0.5*(h_j.at(ax)+h_i.at(ax)));
+                }else if (fabs(hDiff.at(ax))>1e-3){
+                    mcBuf.at(ax).push_back( wDiff.at(ax)/hDiff.at(ax) );
                 }
             }
-
         }
     }
+
+    std::vector<double> mc_avg= mean_cancelOutliner(mcBuf);
+
+
+    mcBuf.erase(mcBuf.begin(),mcBuf.begin()+3);
+    mcBuf.erase(mcBuf.end()-6,mcBuf.end()-3);
     print_matrix("mcBuf",mcBuf);
 
-    std::vector<double> mc_avg(0,0);
 
     print_vector("mc_avg",mc_avg);
 
