@@ -144,9 +144,6 @@ void calFromData(){
 
     std::vector<double> com_= {0,0,0.045};
 
-    std::vector<double> m_est(6,0);
-    std::vector<double> c_est(6,0);
-
     std::vector<std::vector<double> > mcBuf(12,std::vector<double>(0,0));
 
     calData= transpose(calData);
@@ -184,9 +181,9 @@ void calFromData(){
             for(unsigned ax=0;ax<6;ax++){
 //                printf("ax:%d\n",ax);
                 if (fabs(r3_i.at(ax%3))<1e-2){
-                    mcBuf.at(ax+6).push_back(-0.5*(h_j.at(ax)+h_i.at(ax)));
+                    mcBuf.at(ax+6).push_back(-0.5*(h_j.at(ax)+h_i.at(ax))); //bias
                 }else if (fabs(hDiff.at(ax))>1e-3){
-                    mcBuf.at(ax).push_back( wDiff.at(ax)/hDiff.at(ax) );
+                    mcBuf.at(ax).push_back( -1*wDiff.at(ax)/hDiff.at(ax) ); //slope
                 }
             }
         }
@@ -195,14 +192,63 @@ void calFromData(){
     std::vector<double> mc_avg= mean_cancelOutliner(mcBuf);
 
 
-    mcBuf.erase(mcBuf.begin(),mcBuf.begin()+3);
-    mcBuf.erase(mcBuf.end()-6,mcBuf.end()-3);
+//    mcBuf.erase(mcBuf.begin(),mcBuf.begin()+3);
+//    mcBuf.erase(mcBuf.end()-6,mcBuf.end()-3);
+
+    mcBuf.erase(mcBuf.begin()+3,mcBuf.begin()+6);
+    mcBuf.erase(mcBuf.end()-3,mcBuf.end());
+
     print_matrix("mcBuf",mcBuf);
 
 
     print_vector("mc_avg",mc_avg);
 
+    std::vector<double> m_est(mc_avg.begin(),mc_avg.begin()+6);
+    std::vector<double> c_est(mc_avg.begin()+6,mc_avg.end());
+
+    print_vector("m_est",m_est);
+    print_vector("c_est",c_est);
+
 }
+
+void test_drill(){
+    std::vector<std::vector<double> > drillData= {
+        {0.4853,	-2.06289,	-25.7228,	-3.96406,	0.184126,	0.432873,	0.0345216,	-4.81982e-05,	-3.51546e-05,	-1},
+        {0.4853,	-3.06067,	-27.6434,	-15.9496,	0.323656,	0.457733,	0.0139506,	0.00104795,	0.000853643,	0.999999},
+        {0.4853,	-7.3101,	-34.6348,	-11.042,	0.947131,	0.6146,		-0.0488526,	0.000148411,	1,	6.67768e-06},
+        {0.4853,	1.83894,	-18.643,	-8.31844,	-0.597197,	0.299967,	-0.0484958,	-0.00206419,	-0.999998,	6.71564e-06},
+        {0.4852,	-8.42221,	-22.8163,	-8.01368,	0.0984492,	-0.35265,	-0.0233648,	0.999999,	0.00100044,	-1.10537e-05},
+        {0.4853,	3.51058,	-29.7563,	-8.12076,	0.212627,	0.916393,	-0.0430009,	-0.999998,	-0.00207824,	4.75314e-06},
+    };
+
+    std::vector<double> slope= {0.62,0.62,0.8368,1,1,1};
+    std::vector<double> bias= {2.7673848, 26.6123150, 11.0339123, -0.3246744, -0.4851311, -0.0132996};
+
+    drillData= transpose(drillData);
+    for (unsigned int i=0;i<drillData.at(0).size();i++){
+        unsigned int k=drillData.size();
+        std::vector<double> r3_i(3,0);
+        for (unsigned int p=3;p>0;p--)
+            r3_i.at(p-1)= drillData.at(--k).at(i);
+        std::vector<double> h_i(6,0);
+        for (unsigned int p=6;p>0;p--)
+            h_i.at(p-1)= drillData.at(--k).at(i);
+        double massi= drillData.at(--k).at(i);
+
+        for (unsigned int p=0;p<h_i.size();p++){
+            h_i.at(p)= (h_i.at(p)+bias.at(p))*slope.at(p);
+        }
+
+        std::vector<double> f(h_i.begin(),h_i.begin()+3);
+        std::vector<double> tau(h_i.begin()+3,h_i.end());
+
+        print_vector("f",f);
+        print_vector("tau",tau);
+        printf("\n");
+    }
+
+}
+
 
 void calBiasFromData(){
     std::vector<std::vector<double> > zdown= {
