@@ -215,7 +215,7 @@ void ft_sensor::episodeBufForDrillCal(std::vector<std::vector<double> > R, doubl
 void ft_sensor::episodeBufForDrillCal(double calt){
     if (drillBufFt_.size()==0){
         drillBufFt_= std::vector<std::vector<double> >(2,std::vector<double>(0,0));
-        recorder_calDrill_.openFile("~/Desktop/calDrillRecord.csv");
+        recorder_calDrill_.openFile("~/Desktop/calRecord/calDrillRecord.csv");
         recorder_calDrill_.header("h",std::vector<double>(6,0));
         recorder_calDrill_.header("R_row1",std::vector<double>(3,0));
         recorder_calDrill_.header("R_row2",std::vector<double>(3,0));
@@ -329,10 +329,10 @@ void ft_sensor::bufForSensorCal(double massi, std::vector<std::vector<double> > 
 }
 
 void ft_sensor::bufForSensorCal(double massi, double calt){
-    if (sensorBuf_.size()!=13){
-        sensorBuf_= std::vector<std::vector<double> >(13,std::vector<double>(0,0));
+    if (sensorBuf_.size()!=10){
+        sensorBuf_= std::vector<std::vector<double> >(10,std::vector<double>(0,0));
 
-        recorder_calSensor_.openFile("~/Desktop/calRecord.csv");
+        recorder_calSensor_.openFile("~/Desktop/calRecord/calRecord.csv");
         recorder_calSensor_.header("mass");
         recorder_calSensor_.header("h",std::vector<double>(6,0));
         recorder_calSensor_.header("R_row3",std::vector<double>(3,0));
@@ -342,8 +342,6 @@ void ft_sensor::bufForSensorCal(double massi, double calt){
 
     int n=0;
     std::vector<double> h_avg(6,0);
-//    std::vector<double> g= {0,0,9.81};
-    double g= 9.81;
 
     std::unique_lock<std::mutex> ftLockSensorR(mtxSensorR_);
     std::vector<std::vector<double> > R_temp= sensorR_;
@@ -354,11 +352,9 @@ void ft_sensor::bufForSensorCal(double massi, double calt){
     while(t<calt){
         std::vector<double> h= ft_sensor::get_ftRaw();
 
-        for (unsigned int i=0;i<h_avg.size();i++){
+        for (unsigned int i=0;i<h_avg.size();i++)
             h_avg.at(i)+=h.at(i);
-        }
         n++;
-
         t= std::chrono::duration_cast<std::chrono::duration<double> >(
                     std::chrono::high_resolution_clock::now()-t0).count();
         usleep(1e5);
@@ -437,5 +433,11 @@ std::vector<std::vector<double> > ft_sensor::calibrateSensorFromBuf(){
 
 void ft_sensor::save_sensorCalibration(){
     ftDriver_.saveCalibration(sensorMc_);
+    return;
+}
+
+void ft_sensor::setSensorBuf(std::vector<std::vector<double> > sensorBuf){
+    if (sensorBuf.size()==10);
+        sensorBuf_= sensorBuf;
     return;
 }

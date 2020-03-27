@@ -94,15 +94,8 @@ public:
     void bufForSensorCal(double mi, double calt=5);
     std::vector<std::vector<double> > calibrateSensorFromBuf();
     void save_sensorCalibration();
+    void setSensorBuf(std::vector<std::vector<double> > sensorBuf);
 
-
-//    void setCalFtBiasMode(bool calMode);
-//    void calBiasBuf(bool oppDir=0);
-//    bool checkBiasBuffNEq();
-//    void calBiasEpisode(double calt=5);
-//    std::vector<double> calBiasFromBuf();
-//    std::vector<double> calibrateFtBias(double cali_t=5);
-//    void set_ftBias(std::vector<double> bias);
 };
 
 #endif // FT_SENSOR_H
