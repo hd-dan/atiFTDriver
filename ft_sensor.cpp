@@ -135,7 +135,7 @@ void ft_sensor::loopFt(){
     while(!fStop_){
         /// Get ftRaw and Remove drill weight on ft Reading
         std::vector<std::vector<double> > R= sensorR_;
-        std::vector<double> tipW= R*attachW_;
+        std::vector<double> tipW= transpose(R)*attachW_;
         std::vector<double> cali= appendVect(tipW, attachSp_*tipW);
 
         std::unique_lock<std::mutex> ftLockRaw(mtxFtRaw_);
